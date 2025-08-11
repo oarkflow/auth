@@ -34,27 +34,28 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-var (
-	templates *template.Template
-	vault     VaultStorage
-)
+type Manager struct {
+	Templates *template.Template
+	Vault     VaultStorage
+	Config    *Config
+}
 
-func init() {
-	var err error
-	templates, err = template.ParseGlob("static/*.html")
-	if err != nil {
-		log.Fatalf("failed to parse templates: %v", err)
-	}
-
-	v, err := NewSQLiteVaultStorage("vault.db")
+func NewManager() *Manager {
+	cfg := loadConfig()
+	vault, err := NewSQLiteVaultStorage("vault.db")
 	if err != nil {
 		log.Fatalf("Failed to initialize SQLiteVaultStorage: %v", err)
 	}
-	vault = v
+	templates := template.Must(template.ParseGlob("static/*.html"))
+	return &Manager{
+		Templates: templates,
+		Vault:     vault,
+		Config:    cfg,
+	}
 }
 
-func renderTemplate(w http.ResponseWriter, tmpl string, data any) {
-	err := templates.ExecuteTemplate(w, tmpl, data)
+func (m *Manager) renderTemplate(w http.ResponseWriter, tmpl string, data any) {
+	err := m.Templates.ExecuteTemplate(w, tmpl, data)
 	if err != nil {
 		http.Error(w, "Error rendering template", http.StatusInternalServerError)
 		return
@@ -352,19 +353,21 @@ func padHex(s string) string {
 	return fmt.Sprintf("%064s", strings.ToLower(s))
 }
 
+var manager *Manager
+
 func lookupUserByUsername(username string) (UserInfo, bool) {
-	info, err := vault.GetUserInfoByUsername(username)
+	info, err := manager.Vault.GetUserInfoByUsername(username)
 	return info, err == nil
 }
 
 func lookupUserByPubHex(pubHex string) (UserInfo, bool) {
-	info, err := vault.GetUserInfo(pubHex)
+	info, err := manager.Vault.GetUserInfo(pubHex)
 	return info, err == nil
 }
 
 // Helper to get public key by user info
 func getPublicKeyByUserID(userID string) (string, string, error) {
-	pubKey, err := vault.GetUserPublicKey(userID)
+	pubKey, err := manager.Vault.GetUserPublicKey(userID)
 	if err != nil {
 		return "", "", err
 	}
@@ -407,11 +410,13 @@ func getEnv(k, d string) string {
 // --- Main ---
 func main() {
 	os.Setenv("JWT_SECRET", "ca1493f9b638c47219bb82db9843a086")
-	cfg := loadConfig()
+
+	manager = NewManager()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		renderTemplate(w, "index.html", nil)
+		manager.renderTemplate(w, "index.html", nil)
 	})
 	mux.HandleFunc("/health", health)
 	mux.HandleFunc("/nonce", nonce)
@@ -420,19 +425,19 @@ func main() {
 
 	// Login routes
 	mux.HandleFunc("/login", loginSelectionHandler)
-	mux.HandleFunc("/simple-login", simpleLoginHandler(cfg))
-	mux.HandleFunc("/secured-login", securedLoginHandler(cfg))
+	mux.HandleFunc("/simple-login", simpleLoginHandler(manager.Config))
+	mux.HandleFunc("/secured-login", securedLoginHandler(manager.Config))
 
-	mux.HandleFunc("/logout", logoutHandler(cfg))
-	mux.Handle("/protected", pasetoMiddleware(cfg, protectedHandler()))
-	mux.HandleFunc("/sso", ssoHandler(cfg))
+	mux.HandleFunc("/logout", logoutHandler(manager.Config))
+	mux.Handle("/protected", pasetoMiddleware(manager.Config, protectedHandler()))
+	mux.HandleFunc("/sso", ssoHandler(manager.Config))
 
 	// API endpoints
 	mux.HandleFunc("/api/status", apiStatusHandler)
-	mux.Handle("/api/userinfo", pasetoMiddleware(cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiUserInfoHandler(cfg)(w, r)
+	mux.Handle("/api/userinfo", pasetoMiddleware(manager.Config, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiUserInfoHandler(manager.Config)(w, r)
 	})))
-	mux.HandleFunc("/api/login", apiSimpleLoginHandler(cfg))
+	mux.HandleFunc("/api/login", apiSimpleLoginHandler(manager.Config))
 
 	// Serve API demo page
 	mux.HandleFunc("/api-demo", func(w http.ResponseWriter, r *http.Request) {
@@ -440,7 +445,7 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:         cfg.Addr,
+		Addr:         manager.Config.Addr,
 		Handler:      cors(mux),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -448,7 +453,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("▶ listening on http://localhost%s", cfg.Addr)
+		log.Printf("▶ listening on http://localhost%s", manager.Config.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("ListenAndServe: %v", err)
 		}
@@ -489,7 +494,7 @@ func nonce(w http.ResponseWriter, _ *http.Request) {
 
 func register(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-		renderTemplate(w, "register.html", nil)
+		manager.renderTemplate(w, "register.html", nil)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -540,7 +545,7 @@ func register(w http.ResponseWriter, r *http.Request) {
 	verificationMu.Unlock()
 
 	// Store login type preference temporarily
-	vault.SetUserSecret(username+"_logintype", loginType)
+	manager.Vault.SetUserSecret(username+"_logintype", loginType)
 
 	// Securely hash password and store in vault for later use
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -551,9 +556,9 @@ func register(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("bcrypt hash generation failed: %v", err), "/register")
 		return
 	}
-	vault.SetUserSecret(username, string(passwordHash))
+	manager.Vault.SetUserSecret(username, string(passwordHash))
 	// Store password temporarily for verification step
-	vault.SetUserSecret(username+"_plain", password)
+	manager.Vault.SetUserSecret(username+"_plain", password)
 	if isEmail(username) {
 		sendVerificationEmail(username, token)
 		fmt.Fprintf(w, "Registered. Please check your email for verification.")
@@ -589,11 +594,11 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 	delete(verificationTokens, username)
 
 	// Get login type preference
-	loginType, err := vault.GetUserSecret(username + "_logintype")
+	loginType, err := manager.Vault.GetUserSecret(username + "_logintype")
 	if err != nil {
 		loginType = "simple" // default to simple
 	}
-	vault.SetUserSecret(username+"_logintype", "") // Remove temp
+	manager.Vault.SetUserSecret(username+"_logintype", "") // Remove temp
 
 	// Generate key pair after verification
 	pubx, puby, privd := generateKeyPair()
@@ -603,21 +608,21 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 		Username:  username,
 		LoginType: loginType,
 	}
-	vault.SetUserInfo(pubHex, info)
+	manager.Vault.SetUserInfo(pubHex, info)
 	// Store public key in credentials table
-	vault.SetUserPublicKey(info.UserID, padHex(pubx), padHex(puby))
+	manager.Vault.SetUserPublicKey(info.UserID, padHex(pubx), padHex(puby))
 	userRegistryMu.Lock()
 	userRegistry[pubHex] = ecdsa.PublicKey{Curve: curve, X: new(big.Int).SetBytes([]byte(pubx)), Y: new(big.Int).SetBytes([]byte(puby))}
 	userRegistryMu.Unlock()
 	// Retrieve password hash and move to DBUserID key
-	passwordHash, err := vault.GetUserSecret(username)
+	passwordHash, err := manager.Vault.GetUserSecret(username)
 	if err == nil {
-		vault.SetUserSecret(info.UserID, passwordHash)
-		vault.SetUserSecret(username, "") // Remove temp
+		manager.Vault.SetUserSecret(info.UserID, passwordHash)
+		manager.Vault.SetUserSecret(username, "") // Remove temp
 	}
 	// Retrieve plaintext password for encryption
-	password, err := vault.GetUserSecret(username + "_plain")
-	vault.SetUserSecret(username+"_plain", "") // Remove temp
+	password, err := manager.Vault.GetUserSecret(username + "_plain")
+	manager.Vault.SetUserSecret(username+"_plain", "") // Remove temp
 	if err != nil || password == "" {
 		renderErrorPage(w, http.StatusInternalServerError, "Account Setup Error",
 			"Failed to complete account setup due to missing password information.",
@@ -632,7 +637,7 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 		"EncryptedPrivateKeyD": encPrivD,
 	}
 	jsonData, _ := json.Marshal(keyData)
-	renderTemplate(w, "download-key-file.html", map[string]any{"KeyJson": template.JS(string(jsonData))})
+	manager.renderTemplate(w, "download-key-file.html", map[string]any{"KeyJson": template.JS(string(jsonData))})
 }
 
 func encryptPrivateKeyD(privd, password string) string {
@@ -744,7 +749,7 @@ func getClaims(sub, nonce string, ts int64) map[string]any {
 func ssoHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && r.URL.Query().Get("token") == "" {
-			renderTemplate(w, "sso.html", nil)
+			manager.renderTemplate(w, "sso.html", nil)
 			return
 		}
 
@@ -854,7 +859,7 @@ func ssoHandler(cfg *Config) http.HandlerFunc {
 func logoutHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			renderTemplate(w, "logout.html", nil)
+			manager.renderTemplate(w, "logout.html", nil)
 			return
 		}
 		tokenStr := ""
@@ -903,7 +908,7 @@ func logoutHandler(cfg *Config) http.HandlerFunc {
 func loginHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			renderTemplate(w, "secured-login.html", nil)
+			manager.renderTemplate(w, "secured-login.html", nil)
 			return
 		}
 		if err := r.ParseMultipartForm(1 << 20); err != nil {
@@ -967,7 +972,7 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 				"Public key mismatch with stored credentials", "/secured-login")
 			return
 		}
-		passwordHash, err := vault.GetUserSecret(info.UserID)
+		passwordHash, err := manager.Vault.GetUserSecret(info.UserID)
 		if err != nil {
 			renderErrorPage(w, http.StatusUnauthorized, "Account Verification Failed",
 				"Could not verify your account password.",
@@ -1021,7 +1026,7 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			renderTemplate(w, "simple-login.html", nil)
+			manager.renderTemplate(w, "simple-login.html", nil)
 			return
 		}
 
@@ -1057,14 +1062,14 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 		// Check if user has "secured" login type - they cannot use simple login
 		if info.LoginType == "secured" {
 			renderErrorPage(w, http.StatusForbidden, "Secured Login Required",
-				"Your account requires secured login with cryptographic key file.",
-				"Please use the secured login option and upload your cryptographic key file.",
+				"Your account requires secured login with cryptographic key.",
+				"Please use the secured login option and provide your cryptographic key.",
 				"User account configured for secured login only", "/secured-login")
 			return
 		}
 
 		// Get stored password hash
-		passwordHash, err := vault.GetUserSecret(info.UserID)
+		passwordHash, err := manager.Vault.GetUserSecret(info.UserID)
 		if err != nil {
 			renderErrorPage(w, http.StatusUnauthorized, "Invalid Credentials",
 				"The username or password you entered is incorrect.",
@@ -1132,7 +1137,7 @@ func loginSelectionHandler(w http.ResponseWriter, r *http.Request) {
 		userInfo, hasUser = lookupUserByUsername(username)
 	}
 
-	renderTemplate(w, "login-selection.html", map[string]any{
+	manager.renderTemplate(w, "login-selection.html", map[string]any{
 		"HasUser":  hasUser,
 		"UserInfo": userInfo,
 		"Username": username,
@@ -1284,7 +1289,7 @@ func apiSimpleLoginHandler(cfg *Config) http.HandlerFunc {
 		}
 
 		// Verify password
-		passwordHash, err := vault.GetUserSecret(info.UserID)
+		passwordHash, err := manager.Vault.GetUserSecret(info.UserID)
 		if err != nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{
 				"error": "invalid credentials",
@@ -1395,7 +1400,7 @@ func protectedHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pubHex, _ := r.Context().Value("user").(string)
 		info, _ := lookupUserByPubHex(pubHex)
-		renderTemplate(w, "protected.html", map[string]any{
+		manager.renderTemplate(w, "protected.html", map[string]any{
 			"PubHex":   pubHex,
 			"DBUserID": info.UserID,
 			"Username": info.Username,
@@ -1469,7 +1474,7 @@ func renderErrorPage(w http.ResponseWriter, statusCode int, title, message, desc
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(statusCode)
-	if err := templates.ExecuteTemplate(w, "error.html", data); err != nil {
+	if err := manager.Templates.ExecuteTemplate(w, "error.html", data); err != nil {
 		// Fallback to plain text error if template fails
 		http.Error(w, message, statusCode)
 	}
