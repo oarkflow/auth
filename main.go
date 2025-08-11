@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -9,10 +13,12 @@ import (
 	"database/sql"
 	"encoding/base32"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
 	"strings"
@@ -24,6 +30,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 // --- Interfaces and Models ---
@@ -565,6 +572,297 @@ func generateUserID(username string) string {
 	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))[:16]
 }
 
+// --- Cryptographic Functions for Secured Login ---
+
+func generateECDSAKeyPair() (*ecdsa.PrivateKey, string, string, error) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	publicKeyX := fmt.Sprintf("%064x", priv.PublicKey.X)
+	publicKeyY := fmt.Sprintf("%064x", priv.PublicKey.Y)
+
+	return priv, publicKeyX, publicKeyY, nil
+}
+
+func encryptPrivateKeyWithPassword(privateKeyD, password string) (string, error) {
+	// Secure AES-GCM encryption with PBKDF2 key derivation
+	privBytes, err := hex.DecodeString(privateKeyD)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode private key: %w", err)
+	}
+
+	// Generate random salt
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return "", fmt.Errorf("failed to generate salt: %w", err)
+	}
+
+	// Derive key using PBKDF2
+	key := pbkdf2.Key([]byte(password), salt, 100000, 32, sha256.New)
+
+	// Create AES cipher
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	// Create GCM mode
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	// Generate nonce
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", fmt.Errorf("failed to generate nonce: %w", err)
+	}
+
+	// Encrypt the data
+	ciphertext := gcm.Seal(nil, nonce, privBytes, nil)
+
+	// Store salt, nonce, and ciphertext as base64 JSON
+	encData := map[string]string{
+		"salt":       base64.StdEncoding.EncodeToString(salt),
+		"nonce":      base64.StdEncoding.EncodeToString(nonce),
+		"ciphertext": base64.StdEncoding.EncodeToString(ciphertext),
+	}
+
+	jsonData, err := json.Marshal(encData)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal encrypted data: %w", err)
+	}
+
+	return base64.StdEncoding.EncodeToString(jsonData), nil
+}
+
+func decryptPrivateKeyWithPassword(encPrivD, password string) (string, error) {
+	// Secure AES-GCM decryption with PBKDF2 key derivation
+	dataBytes, err := base64.StdEncoding.DecodeString(encPrivD)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode encrypted data: %w", err)
+	}
+
+	var encData map[string]string
+	if err := json.Unmarshal(dataBytes, &encData); err != nil {
+		return "", fmt.Errorf("failed to unmarshal encrypted data: %w", err)
+	}
+
+	salt, err := base64.StdEncoding.DecodeString(encData["salt"])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode salt: %w", err)
+	}
+
+	nonce, err := base64.StdEncoding.DecodeString(encData["nonce"])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode nonce: %w", err)
+	}
+
+	ciphertext, err := base64.StdEncoding.DecodeString(encData["ciphertext"])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode ciphertext: %w", err)
+	}
+
+	// Derive key using PBKDF2
+	key := pbkdf2.Key([]byte(password), salt, 100000, 32, sha256.New)
+
+	// Create AES cipher
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", fmt.Errorf("failed to create cipher: %w", err)
+	}
+
+	// Create GCM mode
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	// Decrypt the data
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt: %w", err)
+	}
+
+	return hex.EncodeToString(plaintext), nil
+}
+
+func storeUserCryptographicKeys(db *sql.DB, userID, publicKeyX, publicKeyY, encryptedPrivateKey string) error {
+	_, err := db.Exec(`INSERT INTO user_crypto_keys(user_id, public_key_x, public_key_y, encrypted_private_key, created_at, updated_at)
+		VALUES(?,?,?,?,?,?)`,
+		userID, publicKeyX, publicKeyY, encryptedPrivateKey, time.Now(), time.Now())
+	return err
+}
+
+func generateCryptographicProof(privateKeyD, nonce string, timestamp int64) (map[string]interface{}, error) {
+	// Parse private key
+	privBytes, err := hex.DecodeString(privateKeyD)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode private key: %w", err)
+	}
+
+	// Create ECDSA private key
+	curve := elliptic.P256()
+	priv := new(ecdsa.PrivateKey)
+	priv.PublicKey.Curve = curve
+	priv.D = new(big.Int).SetBytes(privBytes)
+	priv.PublicKey.X, priv.PublicKey.Y = curve.ScalarBaseMult(priv.D.Bytes())
+
+	// Generate random k for Schnorr signature
+	k, err := rand.Int(rand.Reader, curve.Params().N)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate random k: %w", err)
+	}
+
+	// Calculate R = k*G
+	Rx, Ry := curve.ScalarBaseMult(k.Bytes())
+
+	// Create challenge hash c = H(R || nonce || timestamp)
+	h := sha256.New()
+	h.Write(Rx.Bytes())
+	h.Write(Ry.Bytes())
+	h.Write([]byte(nonce))
+	h.Write([]byte(fmt.Sprintf("%d", timestamp)))
+	c := new(big.Int).SetBytes(h.Sum(nil))
+	c.Mod(c, curve.Params().N)
+
+	// Calculate s = k + c*privKey
+	s := new(big.Int).Mul(c, priv.D)
+	s.Add(k, s)
+	s.Mod(s, curve.Params().N)
+
+	proof := map[string]interface{}{
+		"R":       hex.EncodeToString(append(Rx.Bytes(), Ry.Bytes()...)),
+		"S":       hex.EncodeToString(s.Bytes()),
+		"PubKeyX": fmt.Sprintf("%064x", priv.PublicKey.X),
+		"PubKeyY": fmt.Sprintf("%064x", priv.PublicKey.Y),
+		"Nonce":   nonce,
+		"Ts":      timestamp,
+	}
+
+	return proof, nil
+}
+
+func verifyCryptographicProof(proof map[string]interface{}, expectedPubKeyX, expectedPubKeyY string) error {
+	// Extract proof components
+	rStr, ok := proof["R"].(string)
+	if !ok {
+		return fmt.Errorf("invalid R in proof")
+	}
+
+	sStr, ok := proof["S"].(string)
+	if !ok {
+		return fmt.Errorf("invalid S in proof")
+	}
+
+	pubKeyX, ok := proof["PubKeyX"].(string)
+	if !ok {
+		return fmt.Errorf("invalid PubKeyX in proof")
+	}
+
+	pubKeyY, ok := proof["PubKeyY"].(string)
+	if !ok {
+		return fmt.Errorf("invalid PubKeyY in proof")
+	}
+
+	nonce, ok := proof["Nonce"].(string)
+	if !ok {
+		return fmt.Errorf("invalid Nonce in proof")
+	}
+
+	var timestamp int64
+	switch ts := proof["Ts"].(type) {
+	case int64:
+		timestamp = ts
+	case float64:
+		timestamp = int64(ts)
+	default:
+		return fmt.Errorf("invalid Ts in proof")
+	}
+
+	// Verify timestamp is within acceptable range (60 seconds)
+	now := time.Now().Unix()
+	if now-timestamp > 60 || timestamp-now > 5 {
+		return fmt.Errorf("timestamp outside acceptable window")
+	}
+
+	// Verify public keys match
+	if pubKeyX != expectedPubKeyX || pubKeyY != expectedPubKeyY {
+		return fmt.Errorf("public key mismatch")
+	}
+
+	// Parse proof components
+	rBytes, err := hex.DecodeString(rStr)
+	if err != nil || len(rBytes) != 64 {
+		return fmt.Errorf("invalid R encoding")
+	}
+
+	sBytes, err := hex.DecodeString(sStr)
+	if err != nil {
+		return fmt.Errorf("invalid S encoding")
+	}
+
+	pubXBytes, err := hex.DecodeString(pubKeyX)
+	if err != nil {
+		return fmt.Errorf("invalid PubKeyX encoding")
+	}
+
+	pubYBytes, err := hex.DecodeString(pubKeyY)
+	if err != nil {
+		return fmt.Errorf("invalid PubKeyY encoding")
+	}
+
+	// Reconstruct values
+	curve := elliptic.P256()
+	Rx := new(big.Int).SetBytes(rBytes[:32])
+	Ry := new(big.Int).SetBytes(rBytes[32:])
+	s := new(big.Int).SetBytes(sBytes)
+	pubX := new(big.Int).SetBytes(pubXBytes)
+	pubY := new(big.Int).SetBytes(pubYBytes)
+
+	// Recreate challenge
+	h := sha256.New()
+	h.Write(Rx.Bytes())
+	h.Write(Ry.Bytes())
+	h.Write([]byte(nonce))
+	h.Write([]byte(fmt.Sprintf("%d", timestamp)))
+	c := new(big.Int).SetBytes(h.Sum(nil))
+	c.Mod(c, curve.Params().N)
+
+	// Verify: s*G = R + c*PubKey
+	sGx, sGy := curve.ScalarBaseMult(s.Bytes())
+	cPx, cPy := curve.ScalarMult(pubX, pubY, c.Bytes())
+	expectedX, expectedY := curve.Add(Rx, Ry, cPx, cPy)
+
+	if sGx.Cmp(expectedX) != 0 || sGy.Cmp(expectedY) != 0 {
+		return fmt.Errorf("invalid Schnorr proof")
+	}
+
+	return nil
+}
+
+// Store user's login type preference
+func setUserLoginType(db *sql.DB, userID, loginType string) error {
+	_, err := db.Exec(`UPDATE users SET login_type = ? WHERE id = ?`, loginType, userID)
+	return err
+}
+
+func getUserLoginType(db *sql.DB, userID string) (string, error) {
+	var loginType sql.NullString
+	err := db.QueryRow(`SELECT login_type FROM users WHERE id = ?`, userID).Scan(&loginType)
+	if err != nil {
+		return "", err
+	}
+	if loginType.Valid {
+		return loginType.String, nil
+	}
+	return "simple", nil // Default to simple login
+}
+
+// --- Main function and initialization ---
+
 func main() {
 	logger, _ := zap.NewProduction()
 	defer func() {
@@ -615,13 +913,35 @@ func main() {
 	limiter := newRateLimiter(10, 1*time.Minute)
 
 	// Secure endpoints with middleware
+	// Routes
+	http.Handle("/", securityMiddleware(csrfMiddleware(withTimeout(HomeHandler(), 10*time.Second))))
+	// Standard routes
 	http.Handle("/auth", securityMiddleware(csrfMiddleware(withTimeout(AuthHandler(auth, auditor, limiter), 10*time.Second))))
 	http.Handle("/login", securityMiddleware(csrfMiddleware(withTimeout(FrontendHandler(auth), 10*time.Second))))
-	http.Handle("/logout", securityMiddleware(csrfMiddleware(withTimeout(LogoutHandler(auth), 10*time.Second))))
+
+	// New Login Routes
+	http.Handle("/login-selection", securityMiddleware(csrfMiddleware(withTimeout(LoginSelectionHandler(), 10*time.Second))))
+	http.Handle("/simple-login", securityMiddleware(csrfMiddleware(withTimeout(SimpleLoginHandler(db, auth), 10*time.Second))))
+	http.Handle("/secured-login", securityMiddleware(csrfMiddleware(withTimeout(SecuredLoginHandler(db, auth), 10*time.Second))))
+	http.Handle("/protected", securityMiddleware(csrfMiddleware(withTimeout(ProtectedHandler(db, auth), 10*time.Second))))
+
+	// SSO Routes
+	http.Handle("/sso", securityMiddleware(csrfMiddleware(withTimeout(SSOHandler(auth), 10*time.Second))))
+
+	// API Routes
+	http.Handle("/api/status", securityMiddleware(withTimeout(APIStatusHandler(), 10*time.Second)))
+	http.Handle("/api/userinfo", securityMiddleware(withTimeout(APIUserInfoHandler(db, auth), 10*time.Second)))
+	http.Handle("/api/login", securityMiddleware(withTimeout(APISimpleLoginHandler(db, auth), 10*time.Second)))
+	http.Handle("/api/nonce", securityMiddleware(withTimeout(NonceHandler(), 10*time.Second)))
+
+	// Enhanced logout
+	http.Handle("/logout", securityMiddleware(csrfMiddleware(withTimeout(EnhancedLogoutHandler(auth), 10*time.Second))))
+
+	// Standard routes
 	http.Handle("/forgot-password", securityMiddleware(csrfMiddleware(withTimeout(FrontendForgotPasswordHandler(db), 10*time.Second))))
 	http.Handle("/reset-password", securityMiddleware(csrfMiddleware(withTimeout(FrontendResetPasswordHandler(db, auth), 10*time.Second))))
 	http.Handle("/change-password", securityMiddleware(csrfMiddleware(withTimeout(FrontendChangePasswordHandler(db, auth), 10*time.Second))))
-	http.Handle("/register", securityMiddleware(csrfMiddleware(withTimeout(RegisterHandler(db, sendEmailSMTP), 10*time.Second))))
+	http.Handle("/register", securityMiddleware(csrfMiddleware(withTimeout(EnhancedRegisterHandler(db, sendEmailSMTP), 10*time.Second))))
 	http.Handle("/verify-email", securityMiddleware(csrfMiddleware(withTimeout(VerifyEmailHandler(db), 10*time.Second))))
 	http.Handle("/enroll-totp", securityMiddleware(csrfMiddleware(withTimeout(EnrollTOTPHandler(db), 10*time.Second))))
 	http.Handle("/sessions", securityMiddleware(csrfMiddleware(withTimeout(ListSessionsHandler(db), 10*time.Second))))
@@ -638,34 +958,11 @@ func main() {
 		log.Println("TLS key 'server.key' not found. Generate with:")
 		log.Println("  openssl req -x509 -newkey rsa:2048 -keyout server.key -out server.crt -days 365 -nodes -subj '/CN=localhost'")
 	}
-	log.Fatal(http.ListenAndServeTLS(":8080", "server.crt", "server.key", nil))
+
 	// Ensure template directory exists
 	if _, err := os.Stat("./templates"); os.IsNotExist(err) {
 		log.Fatalf("Template directory './templates' not found")
 	}
-	RegisterHTMLRoutes()
-
-	// --- Use isEmailVerified in registration flow as example ---
-	// Optionally, you can enforce email verification before allowing login or sensitive actions.
-	// Example usage in registration handler or login handler:
-	// verified, err := isEmailVerified(db, userID)
-	// if err != nil || !verified { ... }
-
-	// --- Add refresh token endpoint ---
-	http.Handle("/refresh-token", securityMiddleware(csrfMiddleware(withTimeout(
-		RefreshTokenHandler(auth, db), 10*time.Second))))
-
-	// Example usage of generate/store/revoke refresh token:
-	// When issuing a refresh token after login:
-	// refreshToken, refreshHash, err := generateRefreshToken()
-	// if err == nil {
-	//     _ = storeRefreshToken(db, userID, refreshHash, time.Now().Add(7*24*time.Hour))
-	//     // Return refreshToken to client
-	// }
-	// When revoking:
-	// _ = revokeRefreshToken(db, refreshHash)
-
-	// ...existing code...
 
 	log.Fatal(http.ListenAndServeTLS(":8080", "server.crt", "server.key", nil))
 }

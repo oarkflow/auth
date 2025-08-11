@@ -11,14 +11,14 @@ import (
 
 func storeDemoData(db *sql.DB) {
 	var err error
-	// Demo data
+	// Demo data for simple login
 	pass := "Secret12345@"
 	if err := validatePasswordPolicy(pass); err != nil {
 		log.Fatalf("Demo password policy: %v", err)
 	}
 	passHash, _ := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
-	_, err = db.Exec(`INSERT INTO users(id, username, email, created_at, updated_at) VALUES(?,?,?,?,?)`,
-		"u1", "alice", "alice@example.com", time.Now(), time.Now())
+	_, err = db.Exec(`INSERT INTO users(id, username, email, login_type, created_at, updated_at) VALUES(?,?,?,?,?,?)`,
+		"u1", "alice", "alice@example.com", "simple", time.Now(), time.Now())
 	if err != nil {
 		log.Fatalf("Demo user insert error: %v", err)
 	}
@@ -28,6 +28,8 @@ func storeDemoData(db *sql.DB) {
 	if err != nil {
 		log.Fatalf("Demo password credential insert error: %v", err)
 	}
+
+	// Demo API Key
 	key, keyHash, _ := generateAPIKey()
 	_, err = db.Exec(`INSERT INTO credentials(id, user_id, type, provider, identifier, secret_hash, created_at)
 	VALUES(?,?,?,?,?,?,?)`,
@@ -35,7 +37,40 @@ func storeDemoData(db *sql.DB) {
 	if err != nil {
 		log.Fatalf("Demo apikey credential insert error: %v", err)
 	}
-	fmt.Println("Api Key", key)
+	fmt.Println("Demo API Key:", key)
+
+	// Demo data for secured login user
+	securedPass := "Secured123@"
+	securedPassHash, _ := bcrypt.GenerateFromPassword([]byte(securedPass), bcrypt.DefaultCost)
+	_, err = db.Exec(`INSERT INTO users(id, username, email, login_type, created_at, updated_at) VALUES(?,?,?,?,?,?)`,
+		"u2", "bob", "bob@example.com", "secured", time.Now(), time.Now())
+	if err != nil {
+		log.Printf("Demo secured user already exists or error: %v", err)
+	} else {
+		_, err = db.Exec(`INSERT INTO credentials(id, user_id, type, provider, identifier, secret_hash, created_at)
+		VALUES(?,?,?,?,?,?,?)`,
+			"c2", "u2", "password", "internal", "bob", string(securedPassHash), time.Now())
+		if err != nil {
+			log.Fatalf("Demo secured password credential insert error: %v", err)
+		}
+
+		// Generate crypto keys for secured user (demo purposes)
+		// In production, these would be generated during registration
+		pubKeyX := "demo_pub_x_12345"
+		pubKeyY := "demo_pub_y_67890"
+		encPrivateKey := "demo_encrypted_private_key"
+
+		_, err = db.Exec(`INSERT INTO user_crypto_keys(user_id, public_key_x, public_key_y, encrypted_private_key, created_at, updated_at)
+		VALUES(?,?,?,?,?,?)`,
+			"u2", pubKeyX, pubKeyY, encPrivateKey, time.Now(), time.Now())
+		if err != nil {
+			log.Fatalf("Demo crypto keys insert error: %v", err)
+		}
+
+		fmt.Printf("Demo Secured Login User: bob / Secured123@\n")
+		fmt.Printf("Demo Key File Data: {\"PubKeyX\":\"%s\", \"PubKeyY\":\"%s\", \"EncryptedPrivateKeyD\":\"%s\"}\n",
+			pubKeyX, pubKeyY, encPrivateKey)
+	}
 }
 
 func setupSchema(db *sql.DB) error {
@@ -48,6 +83,7 @@ func setupSchema(db *sql.DB) error {
 		full_name TEXT,
 		avatar_url TEXT,
 		email_verified INTEGER NOT NULL DEFAULT 0,
+		login_type TEXT DEFAULT 'simple',
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
@@ -114,12 +150,23 @@ func setupSchema(db *sql.DB) error {
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE TABLE IF NOT EXISTS user_crypto_keys (
+		user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+		public_key_x TEXT NOT NULL,
+		public_key_y TEXT NOT NULL,
+		encrypted_private_key TEXT NOT NULL,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_credentials_user_id ON credentials(user_id);
 	CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 	CREATE INDEX IF NOT EXISTS idx_password_history_user_id ON password_history(user_id);
 	CREATE INDEX IF NOT EXISTS idx_failed_logins_user_id ON failed_logins(user_id);
 	CREATE INDEX IF NOT EXISTS idx_email_verifications_user_id ON email_verifications(user_id);
 	CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+	CREATE INDEX IF NOT EXISTS idx_user_crypto_keys_user_id ON user_crypto_keys(user_id);
+	CREATE INDEX IF NOT EXISTS idx_user_crypto_keys_pubkey ON user_crypto_keys(public_key_x, public_key_y);
 	`)
 	return err
 }

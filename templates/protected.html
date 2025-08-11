@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protected Area - Secure Authentication</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #007bff 0%, #6f42c1 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            font-weight: 300;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border: 1px solid #c3e6cb;
+            text-align: center;
+        }
+
+        .user-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .user-info h3 {
+            margin: 0 0 15px 0;
+            color: #495057;
+        }
+
+        .user-info p {
+            margin: 5px 0;
+            color: #6c757d;
+        }
+
+        .actions {
+            display: grid;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            text-decoration: none;
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #007bff 0%, #6f42c1 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+            color: white;
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+            color: white;
+        }
+
+        .features {
+            margin-top: 30px;
+        }
+
+        .features h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .features ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .features li {
+            padding: 8px 0;
+            color: #6c757d;
+        }
+
+        .features li:before {
+            content: "✅ ";
+            margin-right: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔒 Protected Area</h1>
+
+        <div class="success-message">
+            <h2>🎉 Authentication Successful!</h2>
+            <p>You have successfully logged in to the secured area.</p>
+        </div>
+
+        <div class="user-info">
+            <h3>Session Information</h3>
+            <p><strong>User ID:</strong> {{.UserID}}</p>
+            <p><strong>Username:</strong> {{.Username}}</p>
+            <p><strong>Login Method:</strong> {{.LoginMethod}}</p>
+            <p><strong>IP Address:</strong> {{.IP}}</p>
+            <p><strong>User Agent:</strong> {{.UserAgent}}</p>
+            <p><strong>Login Time:</strong> {{.LoginTime}}</p>
+        </div>
+
+        <div class="features">
+            <h3>Available Features</h3>
+            <ul>
+                <li>Multi-provider authentication (Password, Google, OAuth2, AWS Cognito, Clerk, API Keys)</li>
+                <li>Simple and Secured login methods</li>
+                <li>Session management and device tracking</li>
+                <li>Password reset and email verification</li>
+                <li>TOTP/MFA support</li>
+                <li>Rate limiting and security headers</li>
+                <li>CSRF protection</li>
+                <li>Audit logging</li>
+            </ul>
+        </div>
+
+        <div class="actions">
+            <a href="/change-password" class="btn btn-primary">Change Password</a>
+            <a href="/sessions" class="btn btn-info">View Sessions</a>
+            <a href="/logout" class="btn btn-danger">Logout</a>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secured Login - Cryptographic Authentication</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #dc3545 0%, #6f42c1 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            font-weight: 300;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input[type="file"],
+        input[type="password"],
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        input[type="file"]:focus,
+        input[type="password"]:focus,
+        input[type="text"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #dc3545;
+            box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #dc3545 0%, #6f42c1 100%);
+            color: white;
+            padding: 14px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            transition: transform 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(220, 53, 69, 0.3);
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+        }
+
+        .alert-error {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .security-notice {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #ffeaa7;
+        }
+
+        .security-notice h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        .security-notice p {
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .link-back {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .link-back a {
+            color: #dc3545;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .link-back a:hover {
+            text-decoration: underline;
+        }
+
+        .provider-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .provider-info h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+
+        .provider-info p {
+            margin: 0;
+            color: #6c757d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Secured Login</h1>
+
+        {{if .Error}}
+        <div class="alert alert-error">
+            {{.Error}}
+        </div>
+        {{end}}
+
+        <div class="security-notice">
+            <h3>🔐 Enhanced Security Authentication</h3>
+            <p>This method requires your encrypted cryptographic key file along with provider authentication for maximum
+                security.</p>
+        </div>
+
+        <div class="provider-info">
+            <h3>Dual Authentication Required</h3>
+            <p>Upload your encrypted key file AND authenticate with your chosen provider.</p>
+        </div>
+
+        <form method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="provider">Provider</label>
+                <select id="provider" name="provider" onchange="toggleFields()">
+                    <option value="password">Username/Password</option>
+                    <option value="google">Google</option>
+                    <option value="oauth2">OAuth2/OIDC</option>
+                    <option value="cognito">AWS Cognito</option>
+                    <option value="clerk">Clerk</option>
+                    <option value="apikey">API Key</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="keyfile">Encrypted Key File (.json)</label>
+                <input type="file" id="keyfile" name="keyfile" accept=".json" required>
+            </div>
+
+            <div class="form-group">
+                <label for="key_password">Key File Password</label>
+                <input type="password" id="key_password" name="key_password"
+                    placeholder="Password used to encrypt your key file" required>
+            </div>
+
+            <div class="form-group" id="identifier-group">
+                <label for="identifier">Username/Email</label>
+                <input type="text" id="identifier" name="identifier" required>
+            </div>
+
+            <div class="form-group" id="secret-group">
+                <label for="secret" id="secret-label">Password</label>
+                <input type="password" id="secret" name="secret" required>
+            </div>
+
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+            <button type="submit" class="btn">Authenticate Securely</button>
+        </form>
+
+        <div class="link-back">
+            <a href="/login-selection">← Back to Login Selection</a>
+        </div>
+    </div>
+
+    <script>
+        function toggleFields() {
+            const provider = document.getElementById('provider').value;
+            const secretLabel = document.getElementById('secret-label');
+            const secretInput = document.getElementById('secret');
+
+            switch (provider) {
+                case 'apikey':
+                    secretLabel.textContent = 'API Key';
+                    secretInput.type = 'text';
+                    break;
+                case 'google':
+                case 'oauth2':
+                case 'cognito':
+                case 'clerk':
+                    secretLabel.textContent = 'ID Token';
+                    secretInput.type = 'text';
+                    break;
+                default:
+                    secretLabel.textContent = 'Password';
+                    secretInput.type = 'password';
+            }
+        }
+    </script>
+</body>
+
+</html>
