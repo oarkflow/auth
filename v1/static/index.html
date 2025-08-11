@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Authentication Framework</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .nav-item {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 25px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: #333;
+            display: block;
+        }
+
+        .nav-item:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .nav-icon {
+            font-size: 2em;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .nav-title {
+            font-size: 1.2em;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #667eea;
+        }
+
+        .nav-description {
+            color: #666;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+
+        .features {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin-top: 30px;
+        }
+
+        .features h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            text-align: left;
+        }
+
+        .feature-item {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .feature-item::before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔐 Secure Authentication Framework</h1>
+        <p class="subtitle">Advanced cryptographic authentication with multiple security levels</p>
+
+        <div class="nav-grid">
+            <a href="/register" class="nav-item">
+                <span class="nav-icon">📝</span>
+                <div class="nav-title">Register</div>
+                <div class="nav-description">Create a new account with email/phone verification</div>
+            </a>
+
+            <a href="/login" class="nav-item">
+                <span class="nav-icon">🔑</span>
+                <div class="nav-title">Login</div>
+                <div class="nav-description">Access your account with simple or secured authentication</div>
+            </a>
+
+            <a href="/protected" class="nav-item">
+                <span class="nav-icon">🛡️</span>
+                <div class="nav-title">Protected Area</div>
+                <div class="nav-description">Secure content requiring authentication</div>
+            </a>
+
+            <a href="/health" class="nav-item">
+                <span class="nav-icon">📊</span>
+                <div class="nav-title">System Health</div>
+                <div class="nav-description">Check API status and system information</div>
+            </a>
+
+            <a href="/api-demo" class="nav-item">
+                <span class="nav-icon">🧪</span>
+                <div class="nav-title">API Demo</div>
+                <div class="nav-description">Interactive demo for testing authentication APIs</div>
+            </a>
+        </div>
+
+        <div class="features">
+            <h3>Security Features</h3>
+            <div class="feature-list">
+                <div class="feature-item">ECDSA cryptographic signatures</div>
+                <div class="feature-item">PASETO secure tokens</div>
+                <div class="feature-item">AES-GCM encryption</div>
+                <div class="feature-item">PBKDF2 key derivation</div>
+                <div class="feature-item">Email/SMS verification</div>
+                <div class="feature-item">Replay attack protection</div>
+                <div class="feature-item">Secure password hashing</div>
+                <div class="feature-item">Session management</div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

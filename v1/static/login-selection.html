@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Options - Secure Authentication</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            font-weight: 300;
+        }
+        .login-options {
+            display: grid;
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .login-option {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 25px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: #333;
+            display: block;
+        }
+        .login-option:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+        .login-option.recommended {
+            border-color: #007bff;
+            background: #e7f3ff;
+        }
+        .login-option.recommended:hover {
+            border-color: #0056b3;
+            background: #cce7ff;
+        }
+        .option-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+        .option-description {
+            color: #666;
+            line-height: 1.5;
+        }
+        .security-badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .high-security {
+            background: #dc3545;
+        }
+        .back-link {
+            margin-top: 30px;
+            color: #667eea;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Choose Login Method</h1>
+    {{if .HasUser}}
+    <p>Welcome back, <strong>{{.UserInfo.Username}}</strong>!</p>
+    <p>Your preferred method: <strong>{{if eq .UserInfo.LoginType "simple"}}Simple Login{{else}}Secured Login{{end}}</strong></p>
+    {{else}}
+    <p>Select your preferred authentication method</p>
+    {{end}}
+
+    <div class="login-options">
+        <a href="/simple-login" class="login-option {{if and .HasUser (eq .UserInfo.LoginType "simple")}}recommended{{end}}">
+        <div class="option-title">
+            Simple Login
+            <span class="security-badge">Standard</span>
+            {{if and .HasUser (eq .UserInfo.LoginType "simple")}}<span class="security-badge" style="background: #007bff;">Preferred</span>{{end}}
+        </div>
+        <div class="option-description">
+            Login with your username and password. Quick and convenient for everyday access.
+        </div>
+        </a>
+
+        <a href="/secured-login" class="login-option {{if and .HasUser (eq .UserInfo.LoginType "secured")}}recommended{{end}}">
+        <div class="option-title">
+            Secured Login
+            <span class="security-badge high-security">High Security</span>
+            {{if and .HasUser (eq .UserInfo.LoginType "secured")}}<span class="security-badge" style="background: #007bff;">Preferred</span>{{end}}
+        </div>
+        <div class="option-description">
+            Advanced cryptographic authentication using your encrypted key file and password. Maximum security for sensitive operations.
+        </div>
+        </a>
+    </div>
+
+    {{if not .HasUser}}
+    <div style="text-align: center; margin: 20px 0;">
+        <p>Know your username? <input type="text" id="usernameInput" placeholder="Enter username" style="padding: 8px; margin: 0 10px;">
+            <button onclick="checkUserPreference()" style="padding: 8px 15px;">Check Preference</button></p>
+    </div>
+    {{end}}
+
+    <a href="/" class="back-link">← Back to Home</a>
+</div>
+
+<script>
+    function checkUserPreference() {
+        const username = document.getElementById('usernameInput').value.trim();
+        if (username) {
+            window.location.href = '/login?username=' + encodeURIComponent(username);
+        } else {
+            alert('Please enter your username');
+        }
+    }
+</script>
+</body>
+</html>

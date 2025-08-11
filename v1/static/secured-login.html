@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secured Login - Cryptographic Authentication</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #dc3545 0%, #6f42c1 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            font-weight: 300;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input[type="file"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        input[type="file"] {
+            padding: 10px;
+        }
+
+        input[type="password"]:focus {
+            outline: none;
+            border-color: #dc3545;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #dc3545 0%, #6f42c1 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.4);
+        }
+
+        .links {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .links a {
+            color: #dc3545;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
+        }
+
+        .security-info {
+            background: #fff3cd;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .security-info h4 {
+            margin: 0 0 10px 0;
+            color: #dc3545;
+        }
+
+        .security-info p {
+            margin: 0;
+            color: #856404;
+            font-size: 14px;
+        }
+
+        .file-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .warning strong {
+            color: #dc3545;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Secured Login</h1>
+
+        <div class="security-info">
+            <h4>🛡️ Maximum Security</h4>
+            <p>Cryptographic proof-based authentication using ECDSA signatures and encrypted key files.</p>
+        </div>
+
+        <div class="warning">
+            <strong>Security Notice:</strong> Never share your key file or password. This method provides the highest
+            level of security for sensitive operations.
+        </div>
+
+        <form method="POST" enctype="multipart/form-data" id="securedLoginForm">
+            <div class="form-group">
+                <label for="keyfile">Upload Encrypted Key File (JSON)</label>
+                <input type="file" id="keyfile" name="keyfile" required>
+                <div class="file-info">
+                    Select the credentials.json file that was downloaded during registration.
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required
+                    placeholder="Enter the password used during registration">
+            </div>
+
+            <button type="submit" class="btn">Authenticate with Cryptographic Proof</button>
+        </form>
+
+        <div class="links">
+            <a href="/login">← Back to Login Options</a>
+            <a href="/register">Don't have an account?</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('securedLoginForm').addEventListener('submit', function (e) {
+            const fileInput = document.getElementById('keyfile');
+            const password = document.getElementById('password').value;
+
+            if (!fileInput.files.length) {
+                e.preventDefault();
+                alert('Please select your key file');
+                return;
+            }
+
+            if (!password) {
+                e.preventDefault();
+                alert('Please enter your password');
+                return;
+            }
+
+            // Validate file is JSON
+            const file = fileInput.files[0];
+            if (!file.name.toLowerCase().endsWith('.json')) {
+                e.preventDefault();
+                alert('Please select a valid JSON key file');
+                return;
+            }
+        });
+
+        document.getElementById('keyfile').addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (file) {
+                const fileInfo = document.querySelector('.file-info');
+                fileInfo.textContent = 'Selected: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+            }
+        });
+    </script>
+</body>
+
+</html>

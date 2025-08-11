@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logout - Secure Authentication</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 50%, #ff6b9d 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: gradientShift 10s ease infinite;
+        }
+
+        @keyframes gradientShift {
+
+            0%,
+            100% {
+                background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 50%, #ff6b9d 100%);
+            }
+
+            50% {
+                background: linear-gradient(135deg, #ff8e53 0%, #ff6b9d 50%, #ff6b6b 100%);
+            }
+        }
+
+        .logout-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            padding: 60px 50px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .logout-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ff6b6b, #ff8e53, #ff6b9d, #ff6b6b);
+            background-size: 200% 100%;
+            animation: borderFlow 3s linear infinite;
+        }
+
+        @keyframes borderFlow {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        .logout-icon {
+            font-size: 4rem;
+            margin-bottom: 30px;
+            display: block;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.8;
+            }
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .security-notice {
+            background: linear-gradient(135deg, #e6fffa 0%, #f0fff4 100%);
+            border-left: 5px solid #38b2ac;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 40px;
+            text-align: left;
+        }
+
+        .security-notice h3 {
+            color: #2c7a7b;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .security-notice p {
+            color: #2d3748;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            padding: 16px 32px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 180px;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-logout {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+            color: white;
+            box-shadow: 0 8px 25px rgba(255, 107, 107, 0.3);
+        }
+
+        .btn-logout:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+        }
+
+        .session-info {
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .session-info h4 {
+            color: #4a5568;
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }
+
+        .session-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #2d3748;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 768px) {
+            .logout-container {
+                padding: 40px 30px;
+                margin: 20px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .subtitle {
+                font-size: 1rem;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 280px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="logout-container">
+        <span class="logout-icon">👋</span>
+        <h1>Sign Out</h1>
+        <p class="subtitle">Thank you for using our secure authentication system</p>
+
+        <div class="security-notice">
+            <h3>🛡️ Session Security</h3>
+            <p>Your session will be completely terminated and all authentication tokens will be invalidated for maximum
+                security.</p>
+        </div>
+
+        <div class="action-buttons">
+            <form method="POST" action="/logout" style="display: inline;">
+                <button type="submit" class="btn btn-logout">
+                    🔐 Secure Logout
+                </button>
+            </form>
+            <a href="/protected" class="btn btn-secondary">
+                ↩️ Stay Logged In
+            </a>
+        </div>
+
+        <div class="session-info">
+            <h4>📊 Session Information</h4>
+            <div class="session-stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="sessionTime">--</span>
+                    <span class="stat-label">Session Duration</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">AES-256</span>
+                    <span class="stat-label">Encryption</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">ECDSA</span>
+                    <span class="stat-label">Signature</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Calculate and display session duration
+        const sessionStart = sessionStorage.getItem('sessionStart') || Date.now();
+        const duration = Math.floor((Date.now() - sessionStart) / 1000);
+        const minutes = Math.floor(duration / 60);
+        const seconds = duration % 60;
+        document.getElementById('sessionTime').textContent = minutes + 'm ' + seconds + 's';
+
+        // Add confirmation for logout
+        document.querySelector('form[action="/logout"]').addEventListener('submit', function (e) {
+            if (!confirm('Are you sure you want to logout? This will terminate your secure session.')) {
+                e.preventDefault();
+            } else {
+                // Clear session storage on logout
+                sessionStorage.clear();
+            }
+        });
+
+        // Enhanced visual feedback
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('mouseenter', function () {
+                this.style.transform = 'translateY(-3px) scale(1.02)';
+            });
+            btn.addEventListener('mouseleave', function () {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+    </script>
+</body>
+
+</html>

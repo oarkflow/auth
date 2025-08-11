@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Error</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 50%, #991b1b 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: gradientShift 15s ease infinite;
+        }
+
+        @keyframes gradientShift {
+
+            0%,
+            100% {
+                background: linear-gradient(135deg, #dc2626 0%, #b91c1c 50%, #991b1b 100%);
+            }
+
+            50% {
+                background: linear-gradient(135deg, #b91c1c 0%, #991b1b 50%, #dc2626 100%);
+            }
+        }
+
+        .error-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            padding: 50px;
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .error-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #dc2626, #b91c1c, #991b1b, #dc2626);
+            background-size: 200% 100%;
+            animation: borderFlow 3s linear infinite;
+        }
+
+        @keyframes borderFlow {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
+        }
+
+        .error-icon {
+            font-size: 5rem;
+            margin-bottom: 30px;
+            display: block;
+            animation: errorShake 2s ease-in-out infinite;
+        }
+
+        @keyframes errorShake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(-5px);
+            }
+
+            75% {
+                transform: translateX(5px);
+            }
+        }
+
+        h1 {
+            color: #1f2937;
+            font-size: 2.8rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            letter-spacing: -0.02em;
+        }
+
+        .error-code {
+            color: #dc2626;
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 30px;
+        }
+
+        .error-message {
+            background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
+            border-left: 5px solid #dc2626;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        .error-message h3 {
+            color: #b91c1c;
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .error-message p {
+            color: #374151;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .error-details {
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            text-align: left;
+        }
+
+        .error-details h4 {
+            color: #1f2937;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .error-details code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            color: #dc2626;
+            font-size: 0.9rem;
+        }
+
+        .troubleshooting {
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            text-align: left;
+        }
+
+        .troubleshooting h3 {
+            color: #1f2937;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .solution-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .solution-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(220, 38, 38, 0.05);
+            border-radius: 8px;
+            border-left: 3px solid #dc2626;
+        }
+
+        .solution-number {
+            background: #dc2626;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }
+
+        .solution-text {
+            color: #374151;
+            line-height: 1.5;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 16px 32px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 160px;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            color: white;
+            box-shadow: 0 8px 25px rgba(220, 38, 38, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(220, 38, 38, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
+        }
+
+        .error-id {
+            margin-top: 30px;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+
+        @media (max-width: 768px) {
+            .error-container {
+                padding: 30px 25px;
+                margin: 20px;
+            }
+
+            h1 {
+                font-size: 2.2rem;
+            }
+
+            .error-code {
+                font-size: 1.1rem;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="error-container">
+        <span class="error-icon">❌</span>
+        <h1>{{.Title}}</h1>
+        {{if .StatusCode}}
+        <div class="error-code">Error {{.StatusCode}}</div>
+        {{end}}
+
+        <div class="error-message">
+            <h3>⚠️ Error Details</h3>
+            <p>{{.Message}}</p>
+            {{if .Description}}
+            <p>{{.Description}}</p>
+            {{end}}
+        </div>
+
+        {{if .Technical}}
+        <div class="error-details">
+            <h4>🔧 Technical Information</h4>
+            <p>{{.Technical}}</p>
+        </div>
+        {{end}}
+
+        <div class="action-buttons">
+            <a href="/" class="btn btn-secondary">🏠 Back to Home</a>
+            {{if .RetryURL}}
+            <a href="{{.RetryURL}}" class="btn btn-primary">🔄 Try Again</a>
+            {{else}}
+            <button onclick="window.location.reload()" class="btn btn-primary">🔄 Refresh Page</button>
+            {{end}}
+        </div>
+
+        {{if .ErrorID}}
+        <div class="error-id">
+            <strong>Error ID:</strong> {{.ErrorID}}<br>
+            <strong>Timestamp:</strong> <span id="timestamp"></span>
+        </div>
+        {{end}}
+    </div>
+
+    <script>
+        // Set current timestamp
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+
+        // Add some interactive feedback
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('mouseenter', function () {
+                this.style.transform = 'translateY(-3px) scale(1.02)';
+            });
+            btn.addEventListener('mouseleave', function () {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+
+        // Auto-focus on retry if needed
+        setTimeout(() => {
+            const retryBtn = document.querySelector('.btn-primary');
+            if (retryBtn && retryBtn.textContent.includes('Try Again')) {
+                retryBtn.focus();
+            }
+        }, 1000);
+    </script>
+</body>
+
+</html>
