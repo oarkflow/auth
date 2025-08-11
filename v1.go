@@ -35,47 +35,30 @@ import (
 )
 
 var (
-	tmplIndex               *template.Template
-	tmplRegister            *template.Template
-	tmplLogin               *template.Template
-	tmplLogout              *template.Template
-	tmplSSO                 *template.Template
-	tmplLoginWithKey        *template.Template
-	tmplProtected           *template.Template
-	tmplDownloadKeyFile     *template.Template
-	tmplLoginSelection      *template.Template
-	tmplSimpleLogin         *template.Template
-	tmplSecuredLogin        *template.Template
-	tmplRegistrationSuccess *template.Template
-	tmplSSOLinkGenerated    *template.Template
-	tmplUploadSuccess       *template.Template
-	tmplError               *template.Template
+	templates *template.Template
+	vault     VaultStorage
 )
 
 func init() {
-	tmplIndex = readTemplate("index.html")
-	tmplRegister = readTemplate("register.html")
-	tmplLogin = readTemplate("login.html")
-	tmplLogout = readTemplate("logout.html")
-	tmplSSO = readTemplate("sso.html")
-	tmplLoginWithKey = readTemplate("login-with-key.html")
-	tmplProtected = readTemplate("protected.html")
-	tmplDownloadKeyFile = readTemplate("download-key-file.html")
-	tmplLoginSelection = readTemplate("login-selection.html")
-	tmplSimpleLogin = readTemplate("simple-login.html")
-	tmplSecuredLogin = readTemplate("secured-login.html")
-	tmplRegistrationSuccess = readTemplate("registration-success.html")
-	tmplSSOLinkGenerated = readTemplate("sso-link.html")
-	tmplUploadSuccess = readTemplate("upload-success.html")
-	tmplError = readTemplate("error.html")
+	var err error
+	templates, err = template.ParseGlob("static/*.html")
+	if err != nil {
+		log.Fatalf("failed to parse templates: %v", err)
+	}
+
+	v, err := NewSQLiteVaultStorage("vault.db")
+	if err != nil {
+		log.Fatalf("Failed to initialize SQLiteVaultStorage: %v", err)
+	}
+	vault = v
 }
 
-func readTemplate(name string) *template.Template {
-	htmlTmpl, err := os.ReadFile("static/" + name)
+func renderTemplate(w http.ResponseWriter, tmpl string, data any) {
+	err := templates.ExecuteTemplate(w, tmpl, data)
 	if err != nil {
-		panic("failed to read template file: " + name + ": " + err.Error())
+		http.Error(w, "Error rendering template", http.StatusInternalServerError)
+		return
 	}
-	return template.Must(template.New(name).Parse(string(htmlTmpl)))
 }
 
 // --- Vault Storage Interface ---
@@ -186,48 +169,6 @@ func (v *SQLiteVaultStorage) GetUserPublicKey(userID string) (map[string]string,
 }
 
 // --- Global Vault Instance ---
-var vault VaultStorage
-
-func init() {
-	v, err := NewSQLiteVaultStorage("vault.db")
-	if err != nil {
-		log.Fatalf("Failed to initialize SQLiteVaultStorage: %v", err)
-	}
-	vault = v
-}
-
-type Config struct {
-	Addr         string
-	PasetoSecret []byte
-	ProofTimeout time.Duration
-}
-
-func loadConfig() *Config {
-	addr := getEnv("LISTEN_ADDR", ":8080")
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		log.Fatal("JWT_SECRET must be set")
-	}
-	ptSec := getEnv("PROOF_TIMEOUTSEC", "5")
-	pt, err := time.ParseDuration(ptSec + "s")
-	if err != nil {
-		log.Printf("invalid PROOF_TIMEOUTSEC, defaulting to 5s")
-		pt = 5 * time.Second
-	}
-	return &Config{
-		Addr:         addr,
-		PasetoSecret: []byte(secret),
-		ProofTimeout: pt,
-	}
-}
-
-func getEnv(k, d string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return d
-}
-
 var (
 	userRegistry     = make(map[string]ecdsa.PublicKey)
 	userRegistryMu   sync.RWMutex
@@ -430,6 +371,39 @@ func getPublicKeyByUserID(userID string) (string, string, error) {
 	return pubKey["PubKeyX"], pubKey["PubKeyY"], nil
 }
 
+// --- Config struct and loadConfig function ---
+type Config struct {
+	Addr         string
+	PasetoSecret []byte
+	ProofTimeout time.Duration
+}
+
+func loadConfig() *Config {
+	addr := getEnv("LISTEN_ADDR", ":8080")
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		log.Fatal("JWT_SECRET must be set")
+	}
+	ptSec := getEnv("PROOF_TIMEOUTSEC", "5")
+	pt, err := time.ParseDuration(ptSec + "s")
+	if err != nil {
+		log.Printf("invalid PROOF_TIMEOUTSEC, defaulting to 5s")
+		pt = 5 * time.Second
+	}
+	return &Config{
+		Addr:         addr,
+		PasetoSecret: []byte(secret),
+		ProofTimeout: pt,
+	}
+}
+
+func getEnv(k, d string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return d
+}
+
 // --- Main ---
 func main() {
 	os.Setenv("JWT_SECRET", "ca1493f9b638c47219bb82db9843a086")
@@ -437,7 +411,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		tmplIndex.Execute(w, nil)
+		renderTemplate(w, "index.html", nil)
 	})
 	mux.HandleFunc("/health", health)
 	mux.HandleFunc("/nonce", nonce)
@@ -515,7 +489,7 @@ func nonce(w http.ResponseWriter, _ *http.Request) {
 
 func register(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-		tmplRegister.Execute(w, nil)
+		renderTemplate(w, "register.html", nil)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -658,7 +632,7 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 		"EncryptedPrivateKeyD": encPrivD,
 	}
 	jsonData, _ := json.Marshal(keyData)
-	tmplDownloadKeyFile.Execute(w, map[string]any{"KeyJson": template.JS(string(jsonData))})
+	renderTemplate(w, "download-key-file.html", map[string]any{"KeyJson": template.JS(string(jsonData))})
 }
 
 func encryptPrivateKeyD(privd, password string) string {
@@ -770,7 +744,7 @@ func getClaims(sub, nonce string, ts int64) map[string]any {
 func ssoHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" && r.URL.Query().Get("token") == "" {
-			tmplSSO.Execute(w, nil)
+			renderTemplate(w, "sso.html", nil)
 			return
 		}
 
@@ -880,7 +854,7 @@ func ssoHandler(cfg *Config) http.HandlerFunc {
 func logoutHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			tmplLogout.Execute(w, nil)
+			renderTemplate(w, "logout.html", nil)
 			return
 		}
 		tokenStr := ""
@@ -929,7 +903,7 @@ func logoutHandler(cfg *Config) http.HandlerFunc {
 func loginHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			tmplSecuredLogin.Execute(w, nil)
+			renderTemplate(w, "secured-login.html", nil)
 			return
 		}
 		if err := r.ParseMultipartForm(1 << 20); err != nil {
@@ -1047,7 +1021,7 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			tmplSimpleLogin.Execute(w, nil)
+			renderTemplate(w, "simple-login.html", nil)
 			return
 		}
 
@@ -1158,7 +1132,7 @@ func loginSelectionHandler(w http.ResponseWriter, r *http.Request) {
 		userInfo, hasUser = lookupUserByUsername(username)
 	}
 
-	tmplLoginSelection.Execute(w, map[string]any{
+	renderTemplate(w, "login-selection.html", map[string]any{
 		"HasUser":  hasUser,
 		"UserInfo": userInfo,
 		"Username": username,
@@ -1421,7 +1395,7 @@ func protectedHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pubHex, _ := r.Context().Value("user").(string)
 		info, _ := lookupUserByPubHex(pubHex)
-		tmplProtected.Execute(w, map[string]any{
+		renderTemplate(w, "protected.html", map[string]any{
 			"PubHex":   pubHex,
 			"DBUserID": info.UserID,
 			"Username": info.Username,
@@ -1495,7 +1469,7 @@ func renderErrorPage(w http.ResponseWriter, statusCode int, title, message, desc
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(statusCode)
-	if err := tmplError.Execute(w, data); err != nil {
+	if err := templates.ExecuteTemplate(w, "error.html", data); err != nil {
 		// Fallback to plain text error if template fails
 		http.Error(w, message, statusCode)
 	}
