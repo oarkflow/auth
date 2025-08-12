@@ -13,7 +13,11 @@
         <!-- Logo/Brand -->
         <div class="text-center mb-8">
             <h1 class="text-3xl font-bold text-gray-900">Central Auth</h1>
+            {{if .Username}}
+            <p class="text-gray-600 mt-2">Secured Login for {{.Username}}</p>
+            {{else}}
             <p class="text-gray-600 mt-2">Cryptographic Authentication</p>
+            {{end}}
         </div>
 
         <!-- Security Badge -->
@@ -49,7 +53,11 @@
         </div>
 
         <!-- Form -->
-        <form method="POST" action="/secured-login" enctype="multipart/form-data" class="space-y-6">
+        <form method="POST" action="/login/secured" enctype="multipart/form-data" class="space-y-6">
+            {{if .Username}}
+            <!-- Hidden Username Field -->
+            <input type="hidden" name="username" value="{{.Username}}">
+            {{end}}
             <!-- OAuth context preservation -->
             {{if .ClientID}}<input type="hidden" name="client_id" value="{{.ClientID}}">{{end}}
             {{if .RedirectURI}}<input type="hidden" name="redirect_uri" value="{{.RedirectURI}}">{{end}}
