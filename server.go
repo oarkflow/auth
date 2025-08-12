@@ -50,6 +50,7 @@ func setupRoutes() http.Handler {
 	mux.Handle("/forgot-password", rateLimitMiddleware(http.HandlerFunc(forgotPasswordHandler)))
 	mux.Handle("/reset-password", rateLimitMiddleware(http.HandlerFunc(resetPasswordHandler)))
 	mux.Handle("/protected", pasetoMiddleware(manager.Config, protectedHandler()))
+	mux.Handle("/secured-area", proofAuthMiddleware(proofProtectedHandler()))
 
 	// OAuth 2.0 Authorization Server endpoints
 	mux.Handle("/oauth/authorize", rateLimitMiddleware(http.HandlerFunc(oauthAuthorizeHandler(manager.Config))))
@@ -62,6 +63,9 @@ func setupRoutes() http.Handler {
 	mux.Handle("/api/status", rateLimitMiddleware(http.HandlerFunc(apiStatusHandler)))
 	mux.Handle("/api/userinfo", pasetoMiddleware(manager.Config, http.HandlerFunc(apiUserInfoHandler(manager.Config))))
 	mux.Handle("/api/login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(apiSimpleLoginHandler(manager.Config)))))
+
+	// Proof-based API endpoints (stateless)
+	mux.Handle("/api/proof/userinfo", rateLimitMiddleware(proofAuthMiddleware(http.HandlerFunc(proofApiUserInfoHandler()))))
 	mux.Handle("/api-demo", rateLimitMiddleware(http.HandlerFunc(apiDemoHandler)))
 
 	// Static files serving

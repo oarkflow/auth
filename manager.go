@@ -195,9 +195,9 @@ func (m *Manager) CleanupExpiredTokens() {
 	m.LogoutDenylistMu.Lock()
 	defer m.LogoutDenylistMu.Unlock()
 	now := time.Now().Unix()
-	for k, v := range m.LogoutDenylist {
-		if v < now {
-			delete(m.LogoutDenylist, k)
+	for token, exp := range m.LogoutDenylist {
+		if exp < now {
+			delete(m.LogoutDenylist, token)
 		}
 	}
 }
@@ -206,8 +206,8 @@ func (m *Manager) CleanupExpiredTokens() {
 func (m *Manager) IsTokenDenylisted(token string) bool {
 	m.LogoutDenylistMu.Lock()
 	defer m.LogoutDenylistMu.Unlock()
-	exp, found := m.LogoutDenylist[token]
-	return found && exp > time.Now().Unix()
+	_, found := m.LogoutDenylist[token]
+	return found
 }
 
 // AddTokenToDenylist adds a token to the logout denylist

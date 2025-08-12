@@ -129,6 +129,15 @@ func ssoHandler(cfg *Config) http.HandlerFunc {
 				return
 			}
 			ctx := context.WithValue(r.Context(), "user", claims["sub"])
+
+			// Clear any previous logout state for SSO login
+			initUserLogoutTracker()
+			if sub, ok := claims["sub"].(string); ok {
+				if userInfo, exists := lookupUserByPubHex(sub); exists {
+					userLogoutTracker.ClearUserLogout(userInfo.UserID)
+				}
+			}
+
 			http.SetCookie(w, getCookie(tokenStr))
 			http.Redirect(w, r.WithContext(ctx), "/protected", http.StatusSeeOther)
 			return
@@ -160,6 +169,15 @@ func ssoHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 		ctx := context.WithValue(r.Context(), "user", claims["sub"])
+
+		// Clear any previous logout state for SSO token login
+		initUserLogoutTracker()
+		if sub, ok := claims["sub"].(string); ok {
+			if userInfo, exists := lookupUserByPubHex(sub); exists {
+				userLogoutTracker.ClearUserLogout(userInfo.UserID)
+			}
+		}
+
 		http.SetCookie(w, getCookie(tokenStr))
 		http.Redirect(w, r.WithContext(ctx), "/protected", http.StatusSeeOther)
 	}
@@ -169,11 +187,15 @@ func ssoHandler(cfg *Config) http.HandlerFunc {
 func logoutHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			manager.renderTemplate(w, "logout.html", nil)
+			// Check if this is a logout success redirect
+			success := r.URL.Query().Get("success")
+			manager.renderTemplate(w, "logout.html", map[string]any{
+				"Success": success == "1",
+			})
 			return
 		}
 		tokenStr := ""
-		cookie, err := r.Cookie("paseto")
+		cookie, err := r.Cookie("session_token")
 		if err == nil {
 			tokenStr = cookie.Value
 		} else if r.Header.Get("Authorization") != "" {
@@ -183,7 +205,7 @@ func logoutHandler(cfg *Config) http.HandlerFunc {
 			renderErrorPage(w, http.StatusBadRequest, "No Authentication Token",
 				"No authentication token found for logout.",
 				"You don't appear to be logged in. Please log in first if you want to access protected areas.",
-				"No paseto cookie or Authorization header found", "/login")
+				"No session_token cookie or Authorization header found", "/login")
 			return
 		}
 		decTok, err := token.DecryptToken(tokenStr, cfg.PasetoSecret)
@@ -203,8 +225,27 @@ func logoutHandler(cfg *Config) http.HandlerFunc {
 		}
 		manager.CleanupExpiredTokens()
 		manager.AddTokenToDenylist(tokenStr, exp)
+
+		// CRITICAL SECURITY: Also logout from proof-based authentication
+		// Extract user ID from token to invalidate proof-based access
+		if sub, ok := decTok.Claims["sub"].(string); ok {
+			if userInfo, exists := lookupUserByPubHex(sub); exists {
+				// Initialize logout tracker if needed
+				initUserLogoutTracker()
+				// Set user as logged out for proof-based auth
+				userLogoutTracker.SetUserLogout(userInfo.UserID)
+			}
+		}
+
 		http.SetCookie(w, getCookie("", -1))
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+
+		// Add cache control headers to prevent browser caching
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+
+		// Redirect to logout confirmation page
+		http.Redirect(w, r, "/logout?success=1", http.StatusSeeOther)
 	}
 }
 
@@ -476,7 +517,11 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		// Set cookie
+		// Set cookie and clear any previous logout state for simple login
+		initUserLogoutTracker()
+		if userInfo, exists := lookupUserByUsername(username); exists {
+			userLogoutTracker.ClearUserLogout(userInfo.UserID)
+		}
 		http.SetCookie(w, getCookie(tokenStr))
 
 		// Handle OAuth flow or regular login
@@ -534,7 +579,7 @@ func apiStatusHandler(w http.ResponseWriter, r *http.Request) {
 func apiUserInfoHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tokenStr := ""
-		cookie, err := r.Cookie("paseto")
+		cookie, err := r.Cookie("session_token")
 		if err == nil {
 			tokenStr = cookie.Value
 		} else if r.Header.Get("Authorization") != "" {
@@ -607,6 +652,42 @@ func apiUserInfoHandler(cfg *Config) http.HandlerFunc {
 				"expiresAt": int64(exp_claim),
 				"timeLeft":  int64(exp_claim) - time.Now().Unix(),
 			},
+		})
+	}
+}
+
+// Proof-based API userinfo handler (stateless)
+func proofApiUserInfoHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userInfo, exists := getUserInfoFromContext(r.Context())
+		if !exists {
+			requireProofForAPI(w, r, "Cryptographic proof required to access user information.")
+			return
+		}
+
+		// Get public key details
+		pubKeyX, pubKeyY, err := getPublicKeyByUserID(userInfo.UserID)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "failed to retrieve user keys",
+			})
+			return
+		}
+
+		pubHex := pubKeyX + ":" + pubKeyY
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"authenticated": true,
+			"stateless":     true,
+			"user": map[string]any{
+				"id":         userInfo.UserID,
+				"username":   userInfo.Username,
+				"login_type": userInfo.LoginType,
+				"pubKeyX":    pubKeyX,
+				"pubKeyY":    pubKeyY,
+				"pubHex":     pubHex,
+			},
+			"message": "Successfully authenticated with cryptographic proof",
 		})
 	}
 }
@@ -698,7 +779,9 @@ func apiSimpleLoginHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		// Set cookie
+		// Set cookie and clear any previous logout state for API login
+		initUserLogoutTracker()
+		userLogoutTracker.ClearUserLogout(info.UserID)
 		http.SetCookie(w, getCookie(tokenStr))
 
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -722,6 +805,49 @@ func protectedHandler() http.Handler {
 			"PubHex":   pubHex,
 			"DBUserID": info.UserID,
 			"Username": info.Username,
+		})
+	})
+}
+
+// Proof-based protected handler (stateless)
+func proofProtectedHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// For GET requests, show the protected page but explain proof requirement
+		if r.Method == "GET" {
+			manager.renderTemplate(w, "protected.html", map[string]any{
+				"RequiresProof": true,
+				"Message":       "This is a stateless protected area. To access user data, make a POST request with a cryptographic proof.",
+			})
+			return
+		}
+
+		// For POST/API requests, user info should be in context from proof middleware
+		userInfo, exists := getUserInfoFromContext(r.Context())
+		if !exists {
+			requireProofForAPI(w, r, "Cryptographic proof required to access this protected resource.")
+			return
+		}
+
+		// Return user information as JSON for API requests
+		if r.Header.Get("Accept") == "application/json" {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"authenticated": true,
+				"stateless":     true,
+				"user": map[string]any{
+					"id":         userInfo.UserID,
+					"username":   userInfo.Username,
+					"login_type": userInfo.LoginType,
+				},
+				"message": "Successfully authenticated with cryptographic proof",
+			})
+			return
+		}
+
+		// For web requests, render the protected page with user data
+		manager.renderTemplate(w, "protected.html", map[string]any{
+			"UserInfo":      userInfo,
+			"Stateless":     true,
+			"Authenticated": true,
 		})
 	})
 }

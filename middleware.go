@@ -12,7 +12,7 @@ import (
 func pasetoMiddleware(cfg *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenStr := ""
-		cookie, err := r.Cookie("paseto")
+		cookie, err := r.Cookie("session_token")
 		if err == nil {
 			tokenStr = cookie.Value
 		} else if r.Header.Get("Authorization") != "" {
@@ -31,6 +31,7 @@ func pasetoMiddleware(cfg *Config, next http.Handler) http.Handler {
 			return
 		}
 		manager.CleanupExpiredTokens()
+
 		if manager.IsTokenDenylisted(tokenStr) {
 			renderErrorPage(w, http.StatusUnauthorized, "Session Expired",
 				"Your session has been terminated.",
@@ -48,6 +49,12 @@ func pasetoMiddleware(cfg *Config, next http.Handler) http.Handler {
 		}
 		claims := decTok.Claims
 		ctx := context.WithValue(r.Context(), "user", claims["sub"])
+
+		// Add cache control headers to prevent browser caching of protected content
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -58,7 +58,7 @@ func oauthAuthorizeHandler(cfg *Config) http.HandlerFunc {
 
 		// Check if user is authenticated
 		tokenStr := ""
-		cookie, err := r.Cookie("paseto")
+		cookie, err := r.Cookie("session_token")
 		if err == nil {
 			tokenStr = cookie.Value
 		}

@@ -203,7 +203,7 @@ func sessionTimeoutMiddleware(cfg *Config, next http.Handler) http.Handler {
 		}
 
 		tokenStr := ""
-		cookie, err := r.Cookie("paseto")
+		cookie, err := r.Cookie("session_token")
 		if err == nil {
 			tokenStr = cookie.Value
 		} else if r.Header.Get("Authorization") != "" {

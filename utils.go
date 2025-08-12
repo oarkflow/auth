@@ -170,7 +170,7 @@ func getCookie(token string, maxAges ...int) *http.Cookie {
 	secure := manager.Config.EnableHTTPS || manager.Config.Environment == "production"
 
 	return &http.Cookie{
-		Name:     "paseto",
+		Name:     "session_token",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,

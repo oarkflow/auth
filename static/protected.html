@@ -56,17 +56,20 @@
                             </div>
                             <span class="text-sm font-medium text-green-700">Authenticated</span>
                         </div>
-                        <a href="/logout"
-                            class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
-                            Sign Out
-                        </a>
+                        <form action="/logout" method="POST">
+                            <button type="submit"
+                                class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
+                                Sign Out
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
         </header>
 
         <!-- Main Content -->
-        <main class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        <main class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8" data-requires-proof="{{.RequiresProof}}"
+            data-stateless="{{.Stateless}}">
             <!-- Welcome Section -->
             <div class="text-center mb-12">
                 <div class="mx-auto h-20 w-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
@@ -76,10 +79,28 @@
                     </svg>
                 </div>
                 <h2 class="text-4xl font-bold text-gray-900 mb-4">Welcome to the Protected Area!</h2>
+                {{if .RequiresProof}}
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 max-w-2xl mx-auto mb-6">
+                    <h3 class="text-lg font-semibold text-blue-900 mb-2">Stateless Authentication Required</h3>
+                    <p class="text-blue-800 mb-4">
+                        This is a proof-based protected area. To access your user data, you need to provide
+                        a cryptographic proof with each request.
+                    </p>
+                    <div class="bg-white border border-blue-200 rounded p-4 text-left">
+                        <h4 class="font-medium text-blue-900 mb-2">API Usage:</h4>
+                        <code class="text-sm text-blue-700 block bg-blue-50 p-2 rounded">
+                            POST /secured-area<br>
+                            Content-Type: application/json<br><br>
+                            {"proof": {"R": "...", "S": "...", "PubKeyX": "...", "PubKeyY": "...", "Nonce": "...", "Ts": ...}}
+                        </code>
+                    </div>
+                </div>
+                {{else}}
                 <p class="text-xl text-gray-600 max-w-2xl mx-auto">
                     You have successfully authenticated with the Central Authentication System.
                     This area is only accessible to verified users.
                 </p>
+                {{end}}
             </div>
 
             <!-- User Info Card -->
@@ -166,60 +187,89 @@
     </div>
 
     <script>
-        // Fetch user information
-        fetch('/api/userinfo', {
-            credentials: 'include'
-        })
-            .then(response => response.json())
-            .then(data => {
-                const userInfoDiv = document.getElementById('userInfo');
-                if (data.error) {
-                    userInfoDiv.innerHTML = `
-                    <div class="text-red-600">
-                        <p>Error loading user information: ${data.error}</p>
+        // Read authentication type from data attributes
+        const main = document.querySelector('main');
+        const requiresProof = main.dataset.requiresProof === 'true';
+        const isStateless = main.dataset.stateless === 'true';
+
+        const userInfoDiv = document.getElementById('userInfo');
+
+        if (requiresProof) {
+            // Show proof requirement message
+            userInfoDiv.innerHTML = `
+                <div class="text-center">
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div class="flex items-center justify-center mb-2">
+                            <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        </div>
+                        <h4 class="text-lg font-medium text-yellow-800 mb-2">Cryptographic Proof Required</h4>
+                        <p class="text-yellow-700 mb-4">
+                            This is a stateless protected area. Make a POST request with your cryptographic proof to access user data.
+                        </p>
+                        <div class="space-y-2 text-sm">
+                            <p><strong>Endpoint:</strong> <code>/api/proof/userinfo</code></p>
+                            <p><strong>Method:</strong> POST</p>
+                            <p><strong>Get Nonce:</strong> <code>GET /nonce</code></p>
+                        </div>
                     </div>
-                `;
-                } else {
-                    userInfoDiv.innerHTML = `
-                    <div class="space-y-3">
-                        <div class="flex justify-between items-center py-2 border-b border-gray-200">
-                            <span class="font-medium text-gray-700">User ID:</span>
-                            <span class="text-gray-900 font-mono text-sm">${data.user?.id || 'N/A'}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-200">
-                            <span class="font-medium text-gray-700">Username:</span>
-                            <span class="text-gray-900">${data.user?.username || 'N/A'}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b border-gray-200">
-                            <span class="font-medium text-gray-700">Login Type:</span>
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${data.user?.login_type === 'secured' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
-                                ${data.user?.login_type || 'simple'}
-                            </span>
-                        </div>
-                        <div class="flex justify-between items-center py-2">
-                            <span class="font-medium text-gray-700">Session Status:</span>
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                ${data.authenticated ? 'Active' : 'Inactive'}
-                            </span>
-                        </div>
-                        ${data.session ? `
-                        <div class="flex justify-between items-center py-2 border-t border-gray-200 pt-3">
-                            <span class="font-medium text-gray-700">Session Expires:</span>
-                            <span class="text-gray-900 text-sm">${new Date(data.session.expiresAt * 1000).toLocaleString()}</span>
-                        </div>
-                        ` : ''}
-                    </div>
-                `;
-                }
-            })
-            .catch(error => {
-                const userInfoDiv = document.getElementById('userInfo');
-                userInfoDiv.innerHTML = `
-                <div class="text-red-600">
-                    <p>Failed to load user information. Please refresh the page.</p>
                 </div>
             `;
-            });
+        } else {
+            // Fetch session-based user information
+            fetch('/api/userinfo', {
+                credentials: 'include'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        userInfoDiv.innerHTML = `
+                        <div class="text-red-600">
+                            <p>Error loading user information: ${data.error}</p>
+                        </div>
+                    `;
+                    } else {
+                        userInfoDiv.innerHTML = `
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center py-2 border-b border-gray-200">
+                                <span class="font-medium text-gray-700">User ID:</span>
+                                <span class="text-gray-900 font-mono text-sm">${data.user?.id || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b border-gray-200">
+                                <span class="font-medium text-gray-700">Username:</span>
+                                <span class="text-gray-900">${data.user?.username || 'N/A'}</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b border-gray-200">
+                                <span class="font-medium text-gray-700">Login Type:</span>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${data.user?.login_type === 'secured' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
+                                    ${data.user?.login_type || 'simple'} (Session-Based)
+                                </span>
+                            </div>
+                            <div class="flex justify-between items-center py-2">
+                                <span class="font-medium text-gray-700">Session Status:</span>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    ${data.authenticated ? 'Active' : 'Inactive'}
+                                </span>
+                            </div>
+                            ${data.session ? `
+                            <div class="flex justify-between items-center py-2 border-t border-gray-200 pt-3">
+                                <span class="font-medium text-gray-700">Session Expires:</span>
+                                <span class="text-gray-900 text-sm">${new Date(data.session.expiresAt * 1000).toLocaleString()}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+                    }
+                })
+                .catch(error => {
+                    userInfoDiv.innerHTML = `
+                    <div class="text-red-600">
+                        <p>Failed to load user information. Please refresh the page.</p>
+                    </div>
+                `;
+                });
+        }
     </script>
 </body>
 
