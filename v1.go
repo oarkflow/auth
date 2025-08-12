@@ -34,11 +34,34 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
+// Global constants
+const (
+	expDuration     = 15 * time.Minute
+	nonceCleanupSec = 60
+)
+
 type Manager struct {
 	Templates *template.Template
 	Vault     VaultStorage
 	Config    *Config
+
+	// Authentication state
+	UserRegistry     map[string]ecdsa.PublicKey
+	UserRegistryMu   sync.RWMutex
+	NonceCache       map[string]int64
+	NonceCacheMu     sync.Mutex
+	LogoutDenylist   map[string]int64
+	LogoutDenylistMu sync.Mutex
+	Curve            elliptic.Curve
+
+	// Verification storage
+	VerificationTokens map[string]string // username -> token
+	VerificationStatus map[string]bool   // username -> verified
+	VerificationMu     sync.RWMutex
 }
+
+// Global manager instance
+var manager *Manager
 
 func NewManager() *Manager {
 	cfg := loadConfig()
@@ -51,14 +74,111 @@ func NewManager() *Manager {
 		Templates: templates,
 		Vault:     vault,
 		Config:    cfg,
+
+		// Initialize authentication state
+		UserRegistry:   make(map[string]ecdsa.PublicKey),
+		NonceCache:     make(map[string]int64),
+		LogoutDenylist: make(map[string]int64),
+		Curve:          elliptic.P256(),
+
+		// Initialize verification storage
+		VerificationTokens: make(map[string]string),
+		VerificationStatus: make(map[string]bool),
 	}
 }
 
+// --- Manager Helper Methods ---
+
+// renderTemplate renders a template with the given data
 func (m *Manager) renderTemplate(w http.ResponseWriter, tmpl string, data any) {
 	err := m.Templates.ExecuteTemplate(w, tmpl, data)
 	if err != nil {
 		http.Error(w, "Error rendering template", http.StatusInternalServerError)
 		return
+	}
+}
+
+// CleanupExpiredTokens removes expired tokens from the logout denylist
+func (m *Manager) CleanupExpiredTokens() {
+	m.LogoutDenylistMu.Lock()
+	defer m.LogoutDenylistMu.Unlock()
+	now := time.Now().Unix()
+	for k, v := range m.LogoutDenylist {
+		if v < now {
+			delete(m.LogoutDenylist, k)
+		}
+	}
+}
+
+// IsTokenDenylisted checks if a token is in the logout denylist
+func (m *Manager) IsTokenDenylisted(token string) bool {
+	m.LogoutDenylistMu.Lock()
+	defer m.LogoutDenylistMu.Unlock()
+	exp, found := m.LogoutDenylist[token]
+	return found && exp > time.Now().Unix()
+}
+
+// AddTokenToDenylist adds a token to the logout denylist
+func (m *Manager) AddTokenToDenylist(token string, exp int64) {
+	m.LogoutDenylistMu.Lock()
+	defer m.LogoutDenylistMu.Unlock()
+	m.LogoutDenylist[token] = exp
+}
+
+// CleanupExpiredNonces removes expired nonces from the cache
+func (m *Manager) CleanupExpiredNonces() {
+	m.NonceCacheMu.Lock()
+	defer m.NonceCacheMu.Unlock()
+	now := time.Now().Unix()
+	for k, ts := range m.NonceCache {
+		if now-ts > nonceCleanupSec {
+			delete(m.NonceCache, k)
+		}
+	}
+}
+
+// IsNonceReplayed checks if a nonce has been used before
+func (m *Manager) IsNonceReplayed(nonce string) bool {
+	m.NonceCacheMu.Lock()
+	defer m.NonceCacheMu.Unlock()
+	now := time.Now().Unix()
+	ts, found := m.NonceCache[nonce]
+	if found && now-ts < nonceCleanupSec {
+		return true
+	}
+	m.NonceCache[nonce] = now
+	return false
+}
+
+// SetVerificationToken sets a verification token for a username
+func (m *Manager) SetVerificationToken(username, token string) {
+	m.VerificationMu.Lock()
+	defer m.VerificationMu.Unlock()
+	m.VerificationTokens[username] = token
+	m.VerificationStatus[username] = false
+}
+
+// VerifyToken checks and consumes a verification token
+func (m *Manager) VerifyToken(username, token string) bool {
+	m.VerificationMu.Lock()
+	defer m.VerificationMu.Unlock()
+	expected, exists := m.VerificationTokens[username]
+	if !exists || expected != token {
+		return false
+	}
+	m.VerificationStatus[username] = true
+	delete(m.VerificationTokens, username)
+	return true
+}
+
+// RegisterUserKey adds a user's public key to the registry
+func (m *Manager) RegisterUserKey(pubHex string, pubKeyX, pubKeyY []byte) {
+	m.UserRegistryMu.Lock()
+	defer m.UserRegistryMu.Unlock()
+	m.UserRegistry[pubHex] = ecdsa.PublicKey{
+		Curve: m.Curve,
+		X:     new(big.Int).SetBytes(pubKeyX),
+		Y:     new(big.Int).SetBytes(pubKeyY),
 	}
 }
 
@@ -169,23 +289,37 @@ func (v *SQLiteVaultStorage) GetUserPublicKey(userID string) (map[string]string,
 	return pubKey, nil
 }
 
-// --- Global Vault Instance ---
-var (
-	userRegistry     = make(map[string]ecdsa.PublicKey)
-	userRegistryMu   sync.RWMutex
-	nonceCache       = make(map[string]int64)
-	nonceCacheMu     sync.Mutex
-	logoutDenylist   = make(map[string]int64)
-	logoutDenylistMu sync.Mutex
-	curve            = elliptic.P256()
-)
+// --- Types ---
+type UserInfo struct {
+	UserID    string `db:"user_id"`
+	Username  string `db:"username"`
+	LoginType string `db:"login_type"`
+}
 
-// Store pending verifications for email and phone
-var (
-	verificationTokens = make(map[string]string) // username -> token
-	verificationStatus = make(map[string]bool)   // username -> verified
-	verificationMu     sync.RWMutex
-)
+type schnorrProof struct {
+	R       string `json:"R"`
+	S       string `json:"S"`
+	PubKeyX string `json:"pubKeyX"`
+	PubKeyY string `json:"pubKeyY"`
+	Nonce   string `json:"nonce"`
+	Ts      int64  `json:"ts"`
+}
+
+type ErrorPageData struct {
+	Title       string
+	StatusCode  int
+	Message     string
+	Description string
+	Technical   string
+	RetryURL    string
+	ErrorID     string
+}
+
+type Config struct {
+	Addr         string
+	PasetoSecret []byte
+	ProofTimeout time.Duration
+}
 
 // Detect if username is email or phone
 func isEmail(username string) bool {
@@ -212,15 +346,7 @@ func sendVerificationSMS(phone, token string) error {
 	return nil
 }
 
-type schnorrProof struct {
-	R       string `json:"R"`
-	S       string `json:"S"`
-	PubKeyX string `json:"pubKeyX"`
-	PubKeyY string `json:"pubKeyY"`
-	Nonce   string `json:"nonce"`
-	Ts      int64  `json:"ts"`
-}
-
+// --- Cryptographic Functions ---
 func makeProof(priv *ecdsa.PrivateKey, nonce string, ts int64) (schnorrProof, error) {
 	curve := priv.PublicKey.Curve
 	r, err := rand.Int(rand.Reader, curve.Params().N)
@@ -342,18 +468,10 @@ func generateKeyPair() (string, string, string) {
 	return pubKeyX, pubKeyY, privD
 }
 
-type UserInfo struct {
-	UserID    string `db:"user_id"`
-	Username  string `db:"username"`
-	LoginType string `db:"login_type"`
-}
-
 // --- Helper Functions ---
 func padHex(s string) string {
 	return fmt.Sprintf("%064s", strings.ToLower(s))
 }
-
-var manager *Manager
 
 func lookupUserByUsername(username string) (UserInfo, bool) {
 	info, err := manager.Vault.GetUserInfoByUsername(username)
@@ -374,13 +492,7 @@ func getPublicKeyByUserID(userID string) (string, string, error) {
 	return pubKey["PubKeyX"], pubKey["PubKeyY"], nil
 }
 
-// --- Config struct and loadConfig function ---
-type Config struct {
-	Addr         string
-	PasetoSecret []byte
-	ProofTimeout time.Duration
-}
-
+// --- Configuration Functions ---
 func loadConfig() *Config {
 	addr := getEnv("LISTEN_ADDR", ":8080")
 	secret := os.Getenv("JWT_SECRET")
@@ -407,43 +519,18 @@ func getEnv(k, d string) string {
 	return d
 }
 
-// --- Main ---
+// --- Main Application ---
 func main() {
+	// Set up environment
 	os.Setenv("JWT_SECRET", "ca1493f9b638c47219bb82db9843a086")
 
+	// Initialize manager
 	manager = NewManager()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		manager.renderTemplate(w, "index.html", nil)
-	})
-	mux.HandleFunc("/health", health)
-	mux.HandleFunc("/nonce", nonce)
-	mux.HandleFunc("/register", register)
-	mux.HandleFunc("/verify", verifyHandler)
+	// Set up routes
+	mux := setupRoutes()
 
-	// Login routes
-	mux.HandleFunc("/login", loginSelectionHandler)
-	mux.HandleFunc("/simple-login", simpleLoginHandler(manager.Config))
-	mux.HandleFunc("/secured-login", securedLoginHandler(manager.Config))
-
-	mux.HandleFunc("/logout", logoutHandler(manager.Config))
-	mux.Handle("/protected", pasetoMiddleware(manager.Config, protectedHandler()))
-	mux.HandleFunc("/sso", ssoHandler(manager.Config))
-
-	// API endpoints
-	mux.HandleFunc("/api/status", apiStatusHandler)
-	mux.Handle("/api/userinfo", pasetoMiddleware(manager.Config, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiUserInfoHandler(manager.Config)(w, r)
-	})))
-	mux.HandleFunc("/api/login", apiSimpleLoginHandler(manager.Config))
-
-	// Serve API demo page
-	mux.HandleFunc("/api-demo", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "api-demo.html")
-	})
-
+	// Configure server
 	srv := &http.Server{
 		Addr:         manager.Config.Addr,
 		Handler:      cors(mux),
@@ -452,16 +539,62 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// Start server
+	startServer(srv)
+}
+
+func setupRoutes() *http.ServeMux {
+	mux := http.NewServeMux()
+
+	// Main routes
+	mux.HandleFunc("/", homeHandler)
+	mux.HandleFunc("/health", health)
+	mux.HandleFunc("/nonce", nonce)
+
+	// Authentication routes
+	mux.HandleFunc("/register", register)
+	mux.HandleFunc("/verify", verifyHandler)
+	mux.HandleFunc("/login", loginSelectionHandler)
+	mux.HandleFunc("/simple-login", simpleLoginHandler(manager.Config))
+	mux.HandleFunc("/secured-login", securedLoginHandler(manager.Config))
+	mux.HandleFunc("/logout", logoutHandler(manager.Config))
+	mux.HandleFunc("/sso", ssoHandler(manager.Config))
+
+	// Protected routes
+	mux.Handle("/protected", pasetoMiddleware(manager.Config, protectedHandler()))
+
+	// API endpoints
+	mux.HandleFunc("/api/status", apiStatusHandler)
+	mux.Handle("/api/userinfo", pasetoMiddleware(manager.Config, http.HandlerFunc(apiUserInfoHandler(manager.Config))))
+	mux.HandleFunc("/api/login", apiSimpleLoginHandler(manager.Config))
+	mux.HandleFunc("/api-demo", apiDemoHandler)
+
+	return mux
+}
+
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	manager.renderTemplate(w, "index.html", nil)
+}
+
+func apiDemoHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "api-demo.html")
+}
+
+func startServer(srv *http.Server) {
 	go func() {
-		log.Printf("▶ listening on http://localhost%s", manager.Config.Addr)
+		log.Printf("▶ listening on http://localhost%s", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("ListenAndServe: %v", err)
 		}
 	}()
 
+	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
+	// Graceful shutdown
 	log.Println("⏳ shutting down…")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -469,7 +602,7 @@ func main() {
 	log.Println("✔ shutdown complete")
 }
 
-// --- Handlers ---
+// --- Basic Handlers ---
 func health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -492,6 +625,7 @@ func nonce(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// --- Registration Handlers ---
 func register(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		manager.renderTemplate(w, "register.html", nil)
@@ -539,10 +673,7 @@ func register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := hex.EncodeToString(tokenBytes)
-	verificationMu.Lock()
-	verificationTokens[username] = token
-	verificationStatus[username] = false
-	verificationMu.Unlock()
+	manager.SetVerificationToken(username, token)
 
 	// Store login type preference temporarily
 	manager.Vault.SetUserSecret(username+"_logintype", loginType)
@@ -580,18 +711,13 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 			"Missing username or token in verification URL", "/register")
 		return
 	}
-	verificationMu.Lock()
-	defer verificationMu.Unlock()
-	expected, exists := verificationTokens[username]
-	if !exists || expected != token {
+	if !manager.VerifyToken(username, token) {
 		renderErrorPage(w, http.StatusBadRequest, "Invalid Verification",
 			"This verification link is either invalid or has already been used.",
 			"The link may have expired or been used already. Please try registering again to get a new verification link.",
 			"Verification token does not match or does not exist", "/register")
 		return
 	}
-	verificationStatus[username] = true
-	delete(verificationTokens, username)
 
 	// Get login type preference
 	loginType, err := manager.Vault.GetUserSecret(username + "_logintype")
@@ -611,9 +737,7 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 	manager.Vault.SetUserInfo(pubHex, info)
 	// Store public key in credentials table
 	manager.Vault.SetUserPublicKey(info.UserID, padHex(pubx), padHex(puby))
-	userRegistryMu.Lock()
-	userRegistry[pubHex] = ecdsa.PublicKey{Curve: curve, X: new(big.Int).SetBytes([]byte(pubx)), Y: new(big.Int).SetBytes([]byte(puby))}
-	userRegistryMu.Unlock()
+	manager.RegisterUserKey(pubHex, []byte(pubx), []byte(puby))
 	// Retrieve password hash and move to DBUserID key
 	passwordHash, err := manager.Vault.GetUserSecret(username)
 	if err == nil {
@@ -730,8 +854,6 @@ func getCookie(token string, maxAges ...int) *http.Cookie {
 }
 
 // --- Paseto Claims Helper ---
-var expDuration = 15 * time.Minute
-
 func getClaims(sub, nonce string, ts int64) map[string]any {
 	return map[string]any{
 		"sub": sub,
@@ -805,10 +927,7 @@ func ssoHandler(cfg *Config) http.HandlerFunc {
 				return
 			}
 			// Blacklist check
-			logoutDenylistMu.Lock()
-			exp, found := logoutDenylist[tokenStr]
-			logoutDenylistMu.Unlock()
-			if found && exp > time.Now().Unix() {
+			if manager.IsTokenDenylisted(tokenStr) {
 				renderErrorPage(w, http.StatusUnauthorized, "Session Terminated",
 					"This authentication token has been logged out.",
 					"Please log in again to access your account.",
@@ -839,10 +958,7 @@ func ssoHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 		claims := decTok.Claims
-		logoutDenylistMu.Lock()
-		exp, found := logoutDenylist[tokenStr]
-		logoutDenylistMu.Unlock()
-		if found && exp > time.Now().Unix() {
+		if manager.IsTokenDenylisted(tokenStr) {
 			renderErrorPage(w, http.StatusUnauthorized, "Session Already Terminated",
 				"This authentication token has been logged out.",
 				"Please log in again to access your account.",
@@ -891,20 +1007,15 @@ func logoutHandler(cfg *Config) http.HandlerFunc {
 				exp = int64(expf)
 			}
 		}
-		logoutDenylistMu.Lock()
-		now := time.Now().Unix()
-		for k, v := range logoutDenylist {
-			if v < now {
-				delete(logoutDenylist, k)
-			}
-		}
-		logoutDenylist[tokenStr] = exp
-		logoutDenylistMu.Unlock()
+		manager.CleanupExpiredTokens()
+		manager.AddTokenToDenylist(tokenStr, exp)
 		http.SetCookie(w, getCookie("", -1))
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
 }
 
+// --- Authentication Handlers ---
+// Secured Login Handler - Cryptographic proof-based authentication
 func loginHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
@@ -1144,7 +1255,7 @@ func loginSelectionHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// --- API endpoints for frontend integration ---
+// --- API Handlers ---
 func apiStatusHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "online",
@@ -1177,17 +1288,8 @@ func apiUserInfoHandler(cfg *Config) http.HandlerFunc {
 		}
 
 		// Check if token is in logout denylist
-		logoutDenylistMu.Lock()
-		now := time.Now().Unix()
-		for k, v := range logoutDenylist {
-			if v < now {
-				delete(logoutDenylist, k)
-			}
-		}
-		exp, found := logoutDenylist[tokenStr]
-		logoutDenylistMu.Unlock()
-
-		if found && exp > time.Now().Unix() {
+		manager.CleanupExpiredTokens()
+		if manager.IsTokenDenylisted(tokenStr) {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{
 				"error": "token has been logged out",
 			})
@@ -1344,7 +1446,7 @@ func apiSimpleLoginHandler(cfg *Config) http.HandlerFunc {
 	}
 }
 
-// --- Paseto Middleware ---
+// --- Middleware ---
 func pasetoMiddleware(cfg *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenStr := ""
@@ -1366,16 +1468,8 @@ func pasetoMiddleware(cfg *Config, next http.Handler) http.Handler {
 				"No authentication token found", "/login")
 			return
 		}
-		logoutDenylistMu.Lock()
-		now := time.Now().Unix()
-		for k, v := range logoutDenylist {
-			if v < now {
-				delete(logoutDenylist, k)
-			}
-		}
-		exp, found := logoutDenylist[tokenStr]
-		logoutDenylistMu.Unlock()
-		if found && exp > time.Now().Unix() {
+		manager.CleanupExpiredTokens()
+		if manager.IsTokenDenylisted(tokenStr) {
 			renderErrorPage(w, http.StatusUnauthorized, "Session Expired",
 				"Your session has been terminated.",
 				"Please log in again to access your account.",
@@ -1409,24 +1503,14 @@ func protectedHandler() http.Handler {
 }
 
 func verifyProofWithReplay(p *schnorrProof) error {
-	now := time.Now().Unix()
-	nonceCacheMu.Lock()
-	for k, ts := range nonceCache {
-		if now-ts > 60 {
-			delete(nonceCache, k)
-		}
-	}
-
-	ts, found := nonceCache[p.Nonce]
-	if found && now-ts < 60 {
-		nonceCacheMu.Unlock()
+	manager.CleanupExpiredNonces()
+	if manager.IsNonceReplayed(p.Nonce) {
 		return fmt.Errorf("nonce replayed")
 	}
-	nonceCache[p.Nonce] = now
-	nonceCacheMu.Unlock()
 	return verifyProof(p)
 }
 
+// --- Utility Functions ---
 func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -1446,18 +1530,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-// ErrorPageData represents the data structure for error page rendering
-type ErrorPageData struct {
-	Title       string
-	StatusCode  int
-	Message     string
-	Description string
-	Technical   string
-	RetryURL    string
-	ErrorID     string
-}
-
-// renderErrorPage renders the error template with proper error data
+// --- Error Handling ---
 func renderErrorPage(w http.ResponseWriter, statusCode int, title, message, description, technical, retryURL string) {
 	// Generate unique error ID
 	errorID := fmt.Sprintf("ERR-%d-%d", time.Now().Unix(), statusCode)
