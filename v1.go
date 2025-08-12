@@ -44,6 +44,8 @@ const (
 	loginCooldownPeriod = 15 * time.Minute
 	maxRequestsPerMin   = 30
 	passwordMinLength   = 8
+	// Password Reset Constants
+	passwordResetTokenExp = 30 * time.Minute
 )
 
 // Phase 1: Rate Limiting and Security Structures
@@ -90,6 +92,10 @@ type Manager struct {
 	VerificationStatus map[string]bool   // username -> verified
 	VerificationMu     sync.RWMutex
 
+	// Password Reset storage
+	PasswordResetTokens map[string]PasswordResetData // token -> reset data
+	PasswordResetMu     sync.RWMutex
+
 	// Phase 1: Security Manager
 	Security *SecurityManager
 }
@@ -118,6 +124,9 @@ func NewManager() *Manager {
 		// Initialize verification storage
 		VerificationTokens: make(map[string]string),
 		VerificationStatus: make(map[string]bool),
+
+		// Initialize password reset storage
+		PasswordResetTokens: make(map[string]PasswordResetData),
 
 		// Initialize security manager
 		Security: NewSecurityManager(),
@@ -164,45 +173,6 @@ func loginProtectionMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-// Phase 1: Enhanced logging and audit functionality
-func logSecurityEvent(userID, action, resource, ipAddress, userAgent string, success bool, errorMsg string) {
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-	logEntry := fmt.Sprintf("[SECURITY] %s | UserID: %s | Action: %s | Resource: %s | IP: %s | Success: %t",
-		timestamp, userID, action, resource, ipAddress, success)
-
-	if errorMsg != "" {
-		logEntry += fmt.Sprintf(" | Error: %s", errorMsg)
-	}
-
-	if userAgent != "" {
-		logEntry += fmt.Sprintf(" | UserAgent: %s", userAgent)
-	}
-
-	log.Println(logEntry)
-}
-
-func auditLogin(username, ipAddress, userAgent string, success bool, errorMsg string) {
-	action := "LOGIN_ATTEMPT"
-	if success {
-		action = "LOGIN_SUCCESS"
-	} else {
-		action = "LOGIN_FAILURE"
-	}
-
-	logSecurityEvent(username, action, "authentication", ipAddress, userAgent, success, errorMsg)
-}
-
-func auditRegistration(username, ipAddress, userAgent string, success bool, errorMsg string) {
-	action := "REGISTRATION_ATTEMPT"
-	if success {
-		action = "REGISTRATION_SUCCESS"
-	} else {
-		action = "REGISTRATION_FAILURE"
-	}
-
-	logSecurityEvent(username, action, "user_registration", ipAddress, userAgent, success, errorMsg)
 }
 
 // --- Manager Helper Methods ---
@@ -287,6 +257,55 @@ func (m *Manager) VerifyToken(username, token string) bool {
 	m.VerificationStatus[username] = true
 	delete(m.VerificationTokens, username)
 	return true
+}
+
+// Password Reset Methods
+func (m *Manager) SetPasswordResetToken(username, token string) {
+	m.PasswordResetMu.Lock()
+	defer m.PasswordResetMu.Unlock()
+	m.PasswordResetTokens[token] = PasswordResetData{
+		Username:  username,
+		Token:     token,
+		ExpiresAt: time.Now().Add(passwordResetTokenExp),
+		Used:      false,
+	}
+}
+
+func (m *Manager) ValidatePasswordResetToken(token string) (PasswordResetData, bool) {
+	m.PasswordResetMu.Lock()
+	defer m.PasswordResetMu.Unlock()
+
+	data, exists := m.PasswordResetTokens[token]
+	if !exists || data.Used || time.Now().After(data.ExpiresAt) {
+		return PasswordResetData{}, false
+	}
+	return data, true
+}
+
+func (m *Manager) ConsumePasswordResetToken(token string) bool {
+	m.PasswordResetMu.Lock()
+	defer m.PasswordResetMu.Unlock()
+
+	data, exists := m.PasswordResetTokens[token]
+	if !exists || data.Used || time.Now().After(data.ExpiresAt) {
+		return false
+	}
+
+	data.Used = true
+	m.PasswordResetTokens[token] = data
+	return true
+}
+
+func (m *Manager) CleanupExpiredPasswordResetTokens() {
+	m.PasswordResetMu.Lock()
+	defer m.PasswordResetMu.Unlock()
+
+	now := time.Now()
+	for token, data := range m.PasswordResetTokens {
+		if data.Used || now.After(data.ExpiresAt) {
+			delete(m.PasswordResetTokens, token)
+		}
+	}
 }
 
 // RegisterUserKey adds a user's public key to the registry
@@ -467,6 +486,13 @@ type ErrorPageData struct {
 	ErrorID     string
 }
 
+type PasswordResetData struct {
+	Username  string
+	Token     string
+	ExpiresAt time.Time
+	Used      bool
+}
+
 type Config struct {
 	Addr         string
 	PasetoSecret []byte
@@ -501,6 +527,20 @@ func sendVerificationEmail(email, token string) error {
 func sendVerificationSMS(phone, token string) error {
 	link := fmt.Sprintf("http://localhost:8080/verify?username=%s&token=%s", phone, token)
 	log.Printf("Verification SMS link for %s: %s", phone, link)
+	return nil
+}
+
+// Send password reset email (demo: just print link)
+func sendPasswordResetEmail(email, token string) error {
+	link := fmt.Sprintf("http://localhost:8080/reset-password?token=%s", token)
+	log.Printf("Password RESET link for %s: %s", email, link)
+	return nil
+}
+
+// Send password reset SMS (demo: just print link)
+func sendPasswordResetSMS(phone, token string) error {
+	link := fmt.Sprintf("http://localhost:8080/reset-password?token=%s", token)
+	log.Printf("Password RESET SMS for %s: %s", phone, link)
 	return nil
 }
 
@@ -710,9 +750,6 @@ func main() {
 	// Initialize manager
 	manager = NewManager()
 
-	// Start periodic cleanup routines
-	manager.StartCleanupRoutines()
-
 	// Set up routes
 	mux := setupRoutes()
 
@@ -745,6 +782,10 @@ func setupRoutes() *http.ServeMux {
 	mux.Handle("/secured-login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(securedLoginHandler(manager.Config)))))
 	mux.Handle("/logout", rateLimitMiddleware(http.HandlerFunc(logoutHandler(manager.Config))))
 	mux.Handle("/sso", rateLimitMiddleware(http.HandlerFunc(ssoHandler(manager.Config))))
+
+	// Password reset routes
+	mux.Handle("/forgot-password", rateLimitMiddleware(http.HandlerFunc(forgotPasswordHandler)))
+	mux.Handle("/reset-password", rateLimitMiddleware(http.HandlerFunc(resetPasswordHandler)))
 
 	// Protected routes
 	mux.Handle("/protected", pasetoMiddleware(manager.Config, protectedHandler()))
@@ -811,6 +852,247 @@ func nonce(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// --- Password Reset Handlers ---
+func forgotPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		manager.renderTemplate(w, "forgot-password.html", nil)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		renderErrorPage(w, http.StatusBadRequest, "Invalid Form Data",
+			"The form data you submitted could not be processed.",
+			"Please check that all required fields are filled correctly and try again.",
+			fmt.Sprintf("ParseForm error: %v", err), "/forgot-password")
+		return
+	}
+
+	username := sanitizeInput(strings.TrimSpace(r.FormValue("username")))
+
+	if username == "" {
+		renderErrorPage(w, http.StatusBadRequest, "Missing Username",
+			"Username is required for password reset.",
+			"Please provide your username (email or phone number).",
+			"Missing username field", "/forgot-password")
+		return
+	}
+
+	// Validate username format
+	var validationErr error
+	if isEmail(username) {
+		validationErr = validateEmail(username)
+	} else if isPhone(username) {
+		validationErr = validatePhone(username)
+	} else {
+		validationErr = fmt.Errorf("username must be a valid email address or phone number")
+	}
+
+	if validationErr != nil {
+		renderErrorPage(w, http.StatusBadRequest, "Invalid Username Format",
+			"The username you provided is not valid.",
+			validationErr.Error(),
+			validationErr.Error(), "/forgot-password")
+		return
+	}
+
+	// Check if user exists (but don't reveal if they don't for security)
+	info, exists := lookupUserByUsername(username)
+
+	// Generate reset token regardless of user existence (to prevent username enumeration)
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		renderErrorPage(w, http.StatusInternalServerError, "System Error",
+			"Failed to generate password reset token.",
+			"Our system encountered an error. Please try again.",
+			fmt.Sprintf("Random token generation failed: %v", err), "/forgot-password")
+		return
+	}
+
+	token := hex.EncodeToString(tokenBytes)
+
+	// Only set the token if user actually exists
+	if exists {
+		manager.SetPasswordResetToken(username, token)
+
+		if isEmail(username) {
+			sendPasswordResetEmail(username, token)
+		} else if isPhone(username) {
+			sendPasswordResetSMS(username, token)
+		}
+
+		log.Printf("Password reset requested for user: %s (ID: %s)", username, info.UserID)
+	}
+
+	// Always show the same success message
+	manager.renderTemplate(w, "forgot-password-sent.html", map[string]any{
+		"Username": username,
+	})
+}
+
+func resetPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			renderErrorPage(w, http.StatusBadRequest, "Missing Reset Token",
+				"No password reset token was provided.",
+				"Please use the complete reset link from your email or SMS.",
+				"Missing token parameter in reset URL", "/forgot-password")
+			return
+		}
+
+		// Validate token
+		resetData, valid := manager.ValidatePasswordResetToken(token)
+		if !valid {
+			renderErrorPage(w, http.StatusBadRequest, "Invalid or Expired Reset Token",
+				"This password reset link is invalid or has expired.",
+				"Please request a new password reset link.",
+				"Invalid or expired reset token", "/forgot-password")
+			return
+		}
+
+		manager.renderTemplate(w, "reset-password.html", map[string]any{
+			"Token":    token,
+			"Username": resetData.Username,
+		})
+		return
+	}
+
+	// POST - Process password reset
+	if err := r.ParseForm(); err != nil {
+		renderErrorPage(w, http.StatusBadRequest, "Invalid Form Data",
+			"The form data could not be processed.",
+			"Please check your input and try again.",
+			fmt.Sprintf("ParseForm error: %v", err), "/forgot-password")
+		return
+	}
+
+	token := r.FormValue("token")
+	newPassword := r.FormValue("password")
+	confirmPassword := r.FormValue("confirmPassword")
+
+	if token == "" || newPassword == "" || confirmPassword == "" {
+		renderErrorPage(w, http.StatusBadRequest, "Missing Required Information",
+			"All fields are required for password reset.",
+			"Please provide the token, new password, and password confirmation.",
+			"Missing required fields", "/forgot-password")
+		return
+	}
+
+	if newPassword != confirmPassword {
+		renderErrorPage(w, http.StatusBadRequest, "Password Mismatch",
+			"The passwords you entered do not match.",
+			"Please ensure both password fields contain the same value.",
+			"Password confirmation mismatch", r.URL.Path)
+		return
+	}
+
+	// Validate new password strength
+	if err := validatePassword(newPassword); err != nil {
+		renderErrorPage(w, http.StatusBadRequest, "Weak Password",
+			"Your new password does not meet the security requirements.",
+			err.Error(),
+			err.Error(), r.URL.Path)
+		return
+	}
+
+	// Validate and consume reset token
+	resetData, valid := manager.ValidatePasswordResetToken(token)
+	if !valid {
+		renderErrorPage(w, http.StatusBadRequest, "Invalid or Expired Reset Token",
+			"This password reset token is invalid or has expired.",
+			"Please request a new password reset link.",
+			"Invalid or expired reset token", "/forgot-password")
+		return
+	}
+
+	if !manager.ConsumePasswordResetToken(token) {
+		renderErrorPage(w, http.StatusBadRequest, "Token Already Used",
+			"This password reset token has already been used.",
+			"Please request a new password reset link if needed.",
+			"Reset token already consumed", "/forgot-password")
+		return
+	}
+
+	// Get user info
+	info, exists := lookupUserByUsername(resetData.Username)
+	if !exists {
+		renderErrorPage(w, http.StatusNotFound, "User Not Found",
+			"The user associated with this reset token was not found.",
+			"This may indicate a system error. Please try registering again.",
+			fmt.Sprintf("User not found for username: %s", resetData.Username), "/register")
+		return
+	}
+
+	// Hash the new password
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		renderErrorPage(w, http.StatusInternalServerError, "Password Processing Error",
+			"Failed to securely process your new password.",
+			"Our system encountered an error while securing your password. Please try again.",
+			fmt.Sprintf("bcrypt hash generation failed: %v", err), "/forgot-password")
+		return
+	}
+
+	// Update password in database
+	if err := manager.Vault.SetUserSecret(info.UserID, string(passwordHash)); err != nil {
+		renderErrorPage(w, http.StatusInternalServerError, "Database Error",
+			"Failed to update your password in the database.",
+			"Our system encountered an error. Please try again.",
+			fmt.Sprintf("Database password update failed: %v", err), "/forgot-password")
+		return
+	}
+
+	// Generate new key pair with new password
+	pubx, puby, privd := generateKeyPair()
+	newPubHex := padHex(pubx) + ":" + padHex(puby)
+
+	// Update user's public key in the database
+	if err := manager.Vault.SetUserPublicKey(info.UserID, padHex(pubx), padHex(puby)); err != nil {
+		log.Printf("Failed to update public key for user %s: %v", info.UserID, err)
+		// Continue anyway - password was updated successfully
+	}
+
+	// Update the pub_hex in users table
+	updatedInfo := UserInfo{
+		UserID:    info.UserID,
+		Username:  info.Username,
+		LoginType: info.LoginType,
+	}
+	if err := manager.Vault.SetUserInfo(newPubHex, updatedInfo); err != nil {
+		log.Printf("Failed to update user info with new pub_hex for user %s: %v", info.UserID, err)
+	}
+
+	// Register the new key
+	manager.RegisterUserKey(newPubHex, []byte(pubx), []byte(puby))
+
+	// Encrypt private key with new password
+	encPrivD := encryptPrivateKeyD(privd, newPassword)
+
+	// Prepare new key data for download
+	keyData := map[string]string{
+		"PubKeyX":              padHex(pubx),
+		"PubKeyY":              padHex(puby),
+		"EncryptedPrivateKeyD": encPrivD,
+	}
+	jsonData, _ := json.Marshal(keyData)
+
+	// Encode as base64 for download link
+	credentialData := base64.StdEncoding.EncodeToString(jsonData)
+
+	// Generate timestamp for filename
+	timestamp := time.Now().Format("20060102_150405")
+
+	log.Printf("Password reset completed for user: %s (ID: %s)", resetData.Username, info.UserID)
+
+	// Render download page with new credentials
+	manager.renderTemplate(w, "password-reset-success.html", map[string]any{
+		"CredentialData": credentialData,
+		"Username":       resetData.Username,
+		"Timestamp":      timestamp,
+		"GeneratedAt":    time.Now().Format("January 2, 2006 at 3:04 PM"),
+	})
+}
+
 // --- Registration Handlers ---
 func register(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
@@ -873,8 +1155,6 @@ func register(w http.ResponseWriter, r *http.Request) {
 
 	// Check if username (email/phone) already exists
 	if _, exists := lookupUserByUsername(username); exists {
-		// Phase 1: Audit failed registration
-		auditRegistration(username, getClientIP(r), r.UserAgent(), false, "Username already exists")
 		renderErrorPage(w, http.StatusConflict, "Username Already Registered",
 			"This username is already associated with an existing account.",
 			"Please try logging in instead, or use a different email address or phone number.",
@@ -910,17 +1190,11 @@ func register(w http.ResponseWriter, r *http.Request) {
 	manager.Vault.SetUserSecret(username+"_plain", password)
 	if isEmail(username) {
 		sendVerificationEmail(username, token)
-		// Phase 1: Audit successful registration initiation
-		auditRegistration(username, getClientIP(r), r.UserAgent(), true, "Email verification sent")
 		fmt.Fprintf(w, "Registered. Please check your email for verification.")
 	} else if isPhone(username) {
 		sendVerificationSMS(username, token)
-		// Phase 1: Audit successful registration initiation
-		auditRegistration(username, getClientIP(r), r.UserAgent(), true, "SMS verification sent")
 		fmt.Fprintf(w, "Registered. Please check your phone for verification.")
 	} else {
-		// Phase 1: Audit registration with unknown username type
-		auditRegistration(username, getClientIP(r), r.UserAgent(), false, "Unknown username type")
 		fmt.Fprintf(w, "Registered. Unknown username type, cannot send verification.")
 	}
 }
@@ -1310,9 +1584,8 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 
 		info, exists := lookupUserByPubHex(pubHex)
 		if !exists {
-			// Phase 1: Record failed login attempt and audit
+			// Phase 1: Record failed login attempt
 			manager.Security.RecordFailedLogin(loginIdentifier)
-			auditLogin("secured_key:"+pubHex[:16], getClientIP(r), r.UserAgent(), false, "Unrecognized cryptographic key")
 			renderErrorPage(w, http.StatusUnauthorized, "Unrecognized Key",
 				"This cryptographic key is not associated with any registered user.",
 				"Please check that you're using the correct key file, or register for a new account.",
@@ -1370,9 +1643,8 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		// Phase 1: Clear failed login attempts on successful authentication and audit
+		// Phase 1: Clear failed login attempts on successful authentication
 		manager.Security.ClearLoginAttempts(loginIdentifier)
-		auditLogin(info.Username, getClientIP(r), r.UserAgent(), true, "Secured login successful with cryptographic proof")
 		claims := getClaims(pubHex, nonce, ts)
 		t := token.CreateToken(expDuration, token.AlgEncrypt)
 		_ = token.RegisterClaims(t, claims)
@@ -1434,9 +1706,8 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 		// Lookup user by username
 		info, exists := lookupUserByUsername(username)
 		if !exists {
-			// Phase 1: Record failed login attempt and audit
+			// Phase 1: Record failed login attempt
 			manager.Security.RecordFailedLogin(loginIdentifier)
-			auditLogin(username, clientIP, r.UserAgent(), false, "Username not found")
 			renderErrorPage(w, http.StatusUnauthorized, "Invalid Credentials",
 				"The username or password you entered is incorrect.",
 				"Please check your credentials and try again, or register for a new account.",
@@ -1467,9 +1738,8 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 
 		// Verify password
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
-			// Phase 1: Record failed login attempt and audit
+			// Phase 1: Record failed login attempt
 			manager.Security.RecordFailedLogin(loginIdentifier)
-			auditLogin(username, clientIP, r.UserAgent(), false, "Invalid password")
 			renderErrorPage(w, http.StatusUnauthorized, "Invalid Credentials",
 				"The username or password you entered is incorrect.",
 				"Please check your credentials and try again.",
@@ -1477,9 +1747,8 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		// Phase 1: Clear failed login attempts and audit successful login
+		// Phase 1: Clear failed login attempts on successful login
 		manager.Security.ClearLoginAttempts(loginIdentifier)
-		auditLogin(username, clientIP, r.UserAgent(), true, "Simple login successful")
 
 		// Get public key for token creation
 		pubKeyX, pubKeyY, err := getPublicKeyByUserID(info.UserID)
@@ -1683,6 +1952,7 @@ func apiSimpleLoginHandler(cfg *Config) http.HandlerFunc {
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(loginReq.Password)); err != nil {
+
 			writeJSON(w, http.StatusUnauthorized, map[string]string{
 				"error": "invalid credentials",
 			})
@@ -1915,7 +2185,7 @@ func (s *SecurityManager) RecordFailedLogin(identifier string) {
 	// Clean up old attempts
 	filtered := make([]time.Time, 0)
 	for _, attemptTime := range s.LoginAttempts[identifier] {
-		if now.Sub(attemptTime) < loginCooldownPeriod*2 { // Keep for 2x cooldown period
+		if now.Sub(attemptTime) < loginCooldownPeriod {
 			filtered = append(filtered, attemptTime)
 		}
 	}
@@ -2025,73 +2295,4 @@ func validatePhone(phone string) error {
 		return fmt.Errorf("invalid phone format")
 	}
 	return nil
-}
-
-// Phase 1: Periodic cleanup routines
-func (m *Manager) StartCleanupRoutines() {
-	// Start cleanup goroutine that runs every 5 minutes
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			// Cleanup expired tokens
-			m.CleanupExpiredTokens()
-
-			// Cleanup expired nonces
-			m.CleanupExpiredNonces()
-
-			// Cleanup old rate limiting data
-			if m.Security != nil {
-				m.Security.CleanupOldData()
-			}
-
-			log.Println("[CLEANUP] Performed periodic cleanup of expired data")
-		}
-	}()
-}
-
-// Add cleanup method to SecurityManager
-func (s *SecurityManager) CleanupOldData() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	now := time.Now()
-
-	// Cleanup old request tracking
-	for identifier, requests := range s.RateLimiter.requests {
-		filtered := make([]time.Time, 0)
-		for _, reqTime := range requests {
-			if now.Sub(reqTime) < time.Hour {
-				filtered = append(filtered, reqTime)
-			}
-		}
-		if len(filtered) == 0 {
-			delete(s.RateLimiter.requests, identifier)
-		} else {
-			s.RateLimiter.requests[identifier] = filtered
-		}
-	}
-
-	// Cleanup old login attempts
-	for identifier, attempts := range s.LoginAttempts {
-		filtered := make([]time.Time, 0)
-		for _, attemptTime := range attempts {
-			if now.Sub(attemptTime) < loginCooldownPeriod*2 { // Keep for 2x cooldown period
-				filtered = append(filtered, attemptTime)
-			}
-		}
-		if len(filtered) == 0 {
-			delete(s.LoginAttempts, identifier)
-		} else {
-			s.LoginAttempts[identifier] = filtered
-		}
-	}
-
-	// Cleanup blocked IPs
-	for ip, blockTime := range s.BlockedIPs {
-		if now.Sub(blockTime) > time.Hour {
-			delete(s.BlockedIPs, ip)
-		}
-	}
 }
