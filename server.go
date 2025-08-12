@@ -36,7 +36,7 @@ func main() {
 func setupRoutes() http.Handler {
 	mux := http.NewServeMux()
 
-	// Routes with individual rate limiting and login protection
+	// Authentication routes
 	mux.Handle("/", rateLimitMiddleware(http.HandlerFunc(homeHandler)))
 	mux.Handle("/health", rateLimitMiddleware(http.HandlerFunc(health)))
 	mux.Handle("/nonce", rateLimitMiddleware(http.HandlerFunc(nonce)))
@@ -50,6 +50,13 @@ func setupRoutes() http.Handler {
 	mux.Handle("/forgot-password", rateLimitMiddleware(http.HandlerFunc(forgotPasswordHandler)))
 	mux.Handle("/reset-password", rateLimitMiddleware(http.HandlerFunc(resetPasswordHandler)))
 	mux.Handle("/protected", pasetoMiddleware(manager.Config, protectedHandler()))
+
+	// OAuth 2.0 Authorization Server endpoints
+	mux.Handle("/oauth/authorize", rateLimitMiddleware(http.HandlerFunc(oauthAuthorizeHandler(manager.Config))))
+	mux.Handle("/oauth/consent", rateLimitMiddleware(http.HandlerFunc(oauthConsentHandler(manager.Config))))
+	mux.Handle("/oauth/token", rateLimitMiddleware(http.HandlerFunc(oauthTokenHandler(manager.Config))))
+	mux.Handle("/oauth/userinfo", rateLimitMiddleware(http.HandlerFunc(oauthUserInfoHandler(manager.Config))))
+	mux.Handle("/oauth/clients/register", rateLimitMiddleware(http.HandlerFunc(clientRegistrationHandler(manager.Config))))
 
 	// API endpoints
 	mux.Handle("/api/status", rateLimitMiddleware(http.HandlerFunc(apiStatusHandler)))

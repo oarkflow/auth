@@ -1,149 +1,168 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Options - Secure Authentication</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+    <title>Login Options - Central Authentication System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8'
+                        }
+                    }
+                }
+            }
         }
-        .container {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-            padding: 40px;
-            max-width: 500px;
-            width: 90%;
-            text-align: center;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
-            font-size: 2.2em;
-            font-weight: 300;
-        }
-        .login-options {
-            display: grid;
-            gap: 20px;
-            margin: 30px 0;
-        }
-        .login-option {
-            background: #f8f9fa;
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            padding: 25px;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            color: #333;
-            display: block;
-        }
-        .login-option:hover {
-            border-color: #667eea;
-            background: #f0f4ff;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
-        }
-        .login-option.recommended {
-            border-color: #007bff;
-            background: #e7f3ff;
-        }
-        .login-option.recommended:hover {
-            border-color: #0056b3;
-            background: #cce7ff;
-        }
-        .option-title {
-            font-size: 1.3em;
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: #667eea;
-        }
-        .option-description {
-            color: #666;
-            line-height: 1.5;
-        }
-        .security-badge {
-            display: inline-block;
-            background: #28a745;
-            color: white;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            margin-left: 10px;
-        }
-        .high-security {
-            background: #dc3545;
-        }
-        .back-link {
-            margin-top: 30px;
-            color: #667eea;
-            text-decoration: none;
-        }
-        .back-link:hover {
-            text-decoration: underline;
-        }
-    </style>
+    </script>
 </head>
-<body>
-<div class="container">
-    <h1>Choose Login Method</h1>
-    {{if .HasUser}}
-    <p>Welcome back, <strong>{{.UserInfo.Username}}</strong>!</p>
-    <p>Your preferred method: <strong>{{if eq .UserInfo.LoginType "simple"}}Simple Login{{else}}Secured Login{{end}}</strong></p>
-    {{else}}
-    <p>Select your preferred authentication method</p>
-    {{end}}
 
-    <div class="login-options">
-        <a href="/simple-login" class="login-option {{if and .HasUser (eq .UserInfo.LoginType "simple")}}recommended{{end}}">
-        <div class="option-title">
-            Simple Login
-            <span class="security-badge">Standard</span>
-            {{if and .HasUser (eq .UserInfo.LoginType "simple")}}<span class="security-badge" style="background: #007bff;">Preferred</span>{{end}}
-        </div>
-        <div class="option-description">
-            Login with your username and password. Quick and convenient for everyday access.
-        </div>
-        </a>
+<body class="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
+    <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full space-y-8">
+            <!-- Header -->
+            <div class="text-center">
+                <div class="mx-auto h-16 w-16 bg-primary-500 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 15v2m0 0v2m0-2h2m-2 0H10m9-9a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-900">Choose Login Method</h1>
+                <p class="mt-2 text-gray-600">Select your preferred authentication method</p>
+                {{if .HasUser}}
+                <div class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p class="text-sm text-blue-800">
+                        Account found for <strong>{{.UserInfo.Username}}</strong>
+                        {{if eq .UserInfo.LoginType "secured"}}
+                        (Secured Login Required)
+                        {{else}}
+                        (Simple Login Available)
+                        {{end}}
+                    </p>
+                </div>
+                {{end}}
+            </div>
 
-        <a href="/secured-login" class="login-option {{if and .HasUser (eq .UserInfo.LoginType "secured")}}recommended{{end}}">
-        <div class="option-title">
-            Secured Login
-            <span class="security-badge high-security">High Security</span>
-            {{if and .HasUser (eq .UserInfo.LoginType "secured")}}<span class="security-badge" style="background: #007bff;">Preferred</span>{{end}}
+            <!-- Login Options -->
+            <div class="space-y-4">
+                {{if not .HasUser}}
+                <!-- Simple Login -->
+                <a href="/simple-login{{if .Username}}?username={{.Username}}{{end}}"
+                    class="group relative w-full flex justify-center py-4 px-6 border-2 border-gray-300 text-sm font-medium rounded-xl text-gray-700 bg-white hover:bg-gray-50 hover:border-primary-300 transition-all duration-200">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 7a2 2 0 012 2m0 0a2 2 0 012 2m-2-2a2 2 0 00-2 2m0 0a2 2 0 01-2 2m-2-2a2 2 0 00-2-2M9 5a2 2 0 012 2v6a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h2z">
+                                    </path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4 text-left">
+                            <h3 class="text-lg font-semibold text-gray-900">Simple Login</h3>
+                            <p class="text-sm text-gray-500">Username and password</p>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Secured Login -->
+                <a href="/secured-login{{if .Username}}?username={{.Username}}{{end}}"
+                    class="group relative w-full flex justify-center py-4 px-6 border-2 border-gray-300 text-sm font-medium rounded-xl text-gray-700 bg-white hover:bg-gray-50 hover:border-primary-300 transition-all duration-200">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z">
+                                    </path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4 text-left">
+                            <h3 class="text-lg font-semibold text-gray-900">Secured Login</h3>
+                            <p class="text-sm text-gray-500">Cryptographic key authentication</p>
+                        </div>
+                    </div>
+                </a>
+                {{else}}
+                <!-- User-specific login option -->
+                {{if eq .UserInfo.LoginType "secured"}}
+                <a href="/secured-login?username={{.Username}}"
+                    class="group relative w-full flex justify-center py-4 px-6 border-2 border-blue-300 text-sm font-medium rounded-xl text-blue-700 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all duration-200">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="h-10 w-10 bg-blue-200 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-blue-700" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z">
+                                    </path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4 text-left">
+                            <h3 class="text-lg font-semibold text-blue-900">Secured Login Required</h3>
+                            <p class="text-sm text-blue-600">Use your cryptographic key</p>
+                        </div>
+                    </div>
+                </a>
+                {{else}}
+                <a href="/simple-login?username={{.Username}}"
+                    class="group relative w-full flex justify-center py-4 px-6 border-2 border-green-300 text-sm font-medium rounded-xl text-green-700 bg-green-50 hover:bg-green-100 hover:border-green-400 transition-all duration-200">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="h-10 w-10 bg-green-200 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-green-700" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 7a2 2 0 012 2m0 0a2 2 0 012 2m-2-2a2 2 0 00-2 2m0 0a2 2 0 01-2 2m-2-2a2 2 0 00-2-2M9 5a2 2 0 012 2v6a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h2z">
+                                    </path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4 text-left">
+                            <h3 class="text-lg font-semibold text-green-900">Simple Login</h3>
+                            <p class="text-sm text-green-600">Enter your password</p>
+                        </div>
+                    </div>
+                </a>
+                {{end}}
+                {{end}}
+            </div>
+
+            <!-- Additional Options -->
+            <div class="space-y-3 pt-6">
+                {{if not .HasUser}}
+                <div class="text-center">
+                    <a href="/register" class="text-sm text-primary-600 hover:text-primary-500 font-medium">
+                        Don't have an account? Register here
+                    </a>
+                </div>
+                {{end}}
+                <div class="text-center">
+                    <a href="/forgot-password" class="text-sm text-gray-500 hover:text-gray-700">
+                        Forgot your password?
+                    </a>
+                </div>
+                <div class="text-center">
+                    <a href="/" class="text-sm text-gray-500 hover:text-gray-700">
+                        ← Back to home
+                    </a>
+                </div>
+            </div>
         </div>
-        <div class="option-description">
-            Advanced cryptographic authentication using your encrypted key file and password. Maximum security for sensitive operations.
-        </div>
-        </a>
     </div>
-
-    {{if not .HasUser}}
-    <div style="text-align: center; margin: 20px 0;">
-        <p>Know your username? <input type="text" id="usernameInput" placeholder="Enter username" style="padding: 8px; margin: 0 10px;">
-            <button onclick="checkUserPreference()" style="padding: 8px 15px;">Check Preference</button></p>
-    </div>
-    {{end}}
-
-    <a href="/" class="back-link">← Back to Home</a>
-</div>
-
-<script>
-    function checkUserPreference() {
-        const username = document.getElementById('usernameInput').value.trim();
-        if (username) {
-            window.location.href = '/login?username=' + encodeURIComponent(username);
-        } else {
-            alert('Please enter your username');
-        }
-    }
-</script>
 </body>
+
 </html>

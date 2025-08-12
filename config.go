@@ -12,7 +12,7 @@ type Config struct {
 	Addr         string
 	PasetoSecret []byte
 	ProofTimeout time.Duration
-	// Phase 1: Enhanced Configuration
+	// Central Authentication System Configuration
 	Environment    string
 	DatabaseURL    string
 	EnableHTTPS    bool
@@ -28,6 +28,14 @@ type Config struct {
 	EnableAuditLogging    bool
 	JWTRefreshEnabled     bool
 	PasswordPolicy        PasswordPolicyConfig
+
+	// Central Auth System specific
+	ServiceName        string
+	AllowedRedirects   []string
+	TokenIssuer        string
+	EnableSSOCallback  bool
+	SSOCallbackURL     string
+	ClientRegistration ClientRegistrationConfig
 }
 
 type PasswordPolicyConfig struct {
@@ -37,6 +45,12 @@ type PasswordPolicyConfig struct {
 	RequireDigit   bool
 	RequireSpecial bool
 	MaxAge         time.Duration
+}
+
+type ClientRegistrationConfig struct {
+	RequireApproval bool
+	DefaultScopes   []string
+	AllowedScopes   []string
 }
 
 // --- Configuration Functions ---
@@ -98,6 +112,19 @@ func loadConfig() *Config {
 		MaxAge:         getEnvAsDuration("PASSWORD_MAX_AGE", "90d"),
 	}
 
+	// Central Auth System Configuration
+	serviceName := getEnv("SERVICE_NAME", "Central Authentication System")
+	allowedRedirects := strings.Split(getEnv("ALLOWED_REDIRECTS", ""), ",")
+	tokenIssuer := getEnv("TOKEN_ISSUER", "central-auth")
+	enableSSOCallback := getEnv("ENABLE_SSO_CALLBACK", "true") == "true"
+	ssoCallbackURL := getEnv("SSO_CALLBACK_URL", "/auth/callback")
+
+	clientRegistration := ClientRegistrationConfig{
+		RequireApproval: getEnv("CLIENT_REQUIRE_APPROVAL", "true") == "true",
+		DefaultScopes:   strings.Split(getEnv("CLIENT_DEFAULT_SCOPES", "profile,email"), ","),
+		AllowedScopes:   strings.Split(getEnv("CLIENT_ALLOWED_SCOPES", "profile,email,read,write"), ","),
+	}
+
 	return &Config{
 		Addr:                  addr,
 		PasetoSecret:          []byte(secret),
@@ -116,6 +143,12 @@ func loadConfig() *Config {
 		EnableAuditLogging:    enableAuditLogging,
 		JWTRefreshEnabled:     jwtRefreshEnabled,
 		PasswordPolicy:        passwordPolicy,
+		ServiceName:           serviceName,
+		AllowedRedirects:      allowedRedirects,
+		TokenIssuer:           tokenIssuer,
+		EnableSSOCallback:     enableSSOCallback,
+		SSOCallbackURL:        ssoCallbackURL,
+		ClientRegistration:    clientRegistration,
 	}
 }
 

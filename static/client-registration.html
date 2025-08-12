@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register OAuth Client - Central Authentication System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
+    <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-2xl w-full space-y-8">
+            <!-- Header -->
+            <div class="text-center">
+                <div class="mx-auto h-16 w-16 bg-primary-500 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+                        </path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-900">Register OAuth Client</h1>
+                <p class="mt-2 text-gray-600">Register your application to use our authentication system</p>
+            </div>
+
+            <!-- Registration Form -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                <form action="/oauth/clients/register" method="POST" class="space-y-6">
+                    <!-- Application Name -->
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700 mb-2">
+                            Application Name *
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h4m0 0v-5a2 2 0 012-2h2a2 2 0 012 2v5m0 0h2M7 7h10M7 11h4">
+                                    </path>
+                                </svg>
+                            </div>
+                            <input type="text" id="name" name="name" required
+                                class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent placeholder-gray-400 transition duration-200"
+                                placeholder="My Awesome App">
+                        </div>
+                    </div>
+
+                    <!-- Redirect URIs -->
+                    <div>
+                        <label for="redirect_uris" class="block text-sm font-medium text-gray-700 mb-2">
+                            Redirect URIs *
+                        </label>
+                        <div class="relative">
+                            <textarea id="redirect_uris" name="redirect_uris" required rows="4"
+                                class="block w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent placeholder-gray-400 transition duration-200"
+                                placeholder="https://yourapp.com/auth/callback&#10;https://yourapp.com/oauth/callback"></textarea>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">
+                            Enter one redirect URI per line. These must be HTTPS URLs (except for localhost
+                            development).
+                        </p>
+                    </div>
+
+                    <!-- Scopes -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-3">
+                            Requested Scopes
+                        </label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label
+                                class="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition duration-200">
+                                <input type="checkbox" name="scopes" value="profile"
+                                    class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                                    checked>
+                                <div class="ml-3">
+                                    <div class="text-sm font-medium text-gray-900">Profile</div>
+                                    <div class="text-sm text-gray-500">Basic profile information</div>
+                                </div>
+                            </label>
+                            <label
+                                class="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition duration-200">
+                                <input type="checkbox" name="scopes" value="email"
+                                    class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                                    checked>
+                                <div class="ml-3">
+                                    <div class="text-sm font-medium text-gray-900">Email</div>
+                                    <div class="text-sm text-gray-500">Email address</div>
+                                </div>
+                            </label>
+                            <label
+                                class="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition duration-200">
+                                <input type="checkbox" name="scopes" value="read"
+                                    class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <div class="ml-3">
+                                    <div class="text-sm font-medium text-gray-900">Read</div>
+                                    <div class="text-sm text-gray-500">Read user data</div>
+                                </div>
+                            </label>
+                            <label
+                                class="flex items-center p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition duration-200">
+                                <input type="checkbox" name="scopes" value="write"
+                                    class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <div class="ml-3">
+                                    <div class="text-sm font-medium text-gray-900">Write</div>
+                                    <div class="text-sm text-gray-500">Modify user data</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div>
+                        <button type="submit"
+                            class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
+                            Register Application
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Information -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd"
+                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-blue-800">
+                            OAuth 2.0 Integration
+                        </h3>
+                        <div class="mt-2 text-sm text-blue-700">
+                            <p>After registration, you'll receive:</p>
+                            <ul class="list-disc ml-5 mt-2">
+                                <li><strong>Client ID</strong> - Public identifier for your application</li>
+                                <li><strong>Client Secret</strong> - Private key for server-to-server communication</li>
+                            </ul>
+                            {{if .Config.ClientRegistration.RequireApproval}}
+                            <p class="mt-3 font-medium">⚠️ Applications require manual approval before they can be used.
+                            </p>
+                            {{end}}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OAuth Endpoints -->
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                <h3 class="text-sm font-medium text-gray-900 mb-3">OAuth 2.0 Endpoints</h3>
+                <div class="space-y-2 text-sm">
+                    <div>
+                        <span class="font-medium text-gray-700">Authorization:</span>
+                        <code class="ml-2 text-gray-600 bg-white px-2 py-1 rounded">/oauth/authorize</code>
+                    </div>
+                    <div>
+                        <span class="font-medium text-gray-700">Token:</span>
+                        <code class="ml-2 text-gray-600 bg-white px-2 py-1 rounded">/oauth/token</code>
+                    </div>
+                    <div>
+                        <span class="font-medium text-gray-700">User Info:</span>
+                        <code class="ml-2 text-gray-600 bg-white px-2 py-1 rounded">/oauth/userinfo</code>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Back Link -->
+            <div class="text-center">
+                <a href="/" class="text-sm text-gray-500 hover:text-gray-700">
+                    ← Back to home
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

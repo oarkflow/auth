@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -372,6 +373,12 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 		username := strings.TrimSpace(r.FormValue("username"))
 		password := r.FormValue("password")
 
+		// OAuth parameters
+		clientID := r.FormValue("client_id")
+		redirectURI := r.FormValue("redirect_uri")
+		scope := r.FormValue("scope")
+		state := r.FormValue("state")
+
 		if username == "" || password == "" {
 			renderErrorPage(w, http.StatusBadRequest, "Missing Login Information",
 				"Username and password are required for login.",
@@ -380,7 +387,7 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		// Phase 1: Enhanced input validation and sanitization
+		// Enhanced input validation and sanitization
 		username = sanitizeInput(username)
 		clientIP := getClientIP(r)
 		loginIdentifier := fmt.Sprintf("%s:%s", clientIP, username)
@@ -397,7 +404,7 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 		// Lookup user by username
 		info, exists := lookupUserByUsername(username)
 		if !exists {
-			// Phase 1: Record failed login attempt
+			// Record failed login attempt
 			manager.Security.RecordFailedLogin(loginIdentifier)
 			renderErrorPage(w, http.StatusUnauthorized, "Invalid Credentials",
 				"The username or password you entered is incorrect.",
@@ -418,7 +425,7 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 		// Get stored password hash
 		passwordHash, err := manager.Vault.GetUserSecret(info.UserID)
 		if err != nil {
-			// Phase 1: Record failed login attempt
+			// Record failed login attempt
 			manager.Security.RecordFailedLogin(loginIdentifier)
 			renderErrorPage(w, http.StatusUnauthorized, "Invalid Credentials",
 				"The username or password you entered is incorrect.",
@@ -429,7 +436,7 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 
 		// Verify password
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
-			// Phase 1: Record failed login attempt
+			// Record failed login attempt
 			manager.Security.RecordFailedLogin(loginIdentifier)
 			renderErrorPage(w, http.StatusUnauthorized, "Invalid Credentials",
 				"The username or password you entered is incorrect.",
@@ -438,7 +445,7 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		// Phase 1: Clear failed login attempts on successful login
+		// Clear failed login attempts on successful login
 		manager.Security.ClearLoginAttempts(loginIdentifier)
 
 		// Get public key for token creation
@@ -469,9 +476,25 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
-		// Set cookie and redirect to protected area
+		// Set cookie
 		http.SetCookie(w, getCookie(tokenStr))
-		http.Redirect(w, r, "/protected", http.StatusSeeOther)
+
+		// Handle OAuth flow or regular login
+		if clientID != "" && redirectURI != "" {
+			// OAuth authorization flow
+			authURL := fmt.Sprintf("/oauth/authorize?client_id=%s&redirect_uri=%s&response_type=code",
+				url.QueryEscape(clientID), url.QueryEscape(redirectURI))
+			if scope != "" {
+				authURL += "&scope=" + url.QueryEscape(scope)
+			}
+			if state != "" {
+				authURL += "&state=" + url.QueryEscape(state)
+			}
+			http.Redirect(w, r, authURL, http.StatusFound)
+		} else {
+			// Regular login - redirect to protected area
+			http.Redirect(w, r, "/protected", http.StatusSeeOther)
+		}
 	}
 }
 
@@ -572,11 +595,12 @@ func apiUserInfoHandler(cfg *Config) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"authenticated": true,
 			"user": map[string]any{
-				"id":       info.UserID,
-				"username": info.Username,
-				"pubKeyX":  pubKeyX,
-				"pubKeyY":  pubKeyY,
-				"pubHex":   pubHex,
+				"id":         info.UserID,
+				"username":   info.Username,
+				"login_type": info.LoginType,
+				"pubKeyX":    pubKeyX,
+				"pubKeyY":    pubKeyY,
+				"pubHex":     pubHex,
 			},
 			"session": map[string]any{
 				"issuedAt":  int64(iat),
