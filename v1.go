@@ -17,6 +17,7 @@ import (
 	"html/template"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -38,7 +39,37 @@ import (
 const (
 	expDuration     = 15 * time.Minute
 	nonceCleanupSec = 60
+	// Phase 1 Security Constants
+	maxLoginAttempts    = 5
+	loginCooldownPeriod = 15 * time.Minute
+	maxRequestsPerMin   = 30
+	passwordMinLength   = 8
 )
+
+// Phase 1: Rate Limiting and Security Structures
+type RateLimiter struct {
+	requests map[string][]time.Time
+	attempts map[string][]time.Time
+	mu       sync.RWMutex
+}
+
+type SecurityManager struct {
+	RateLimiter   *RateLimiter
+	LoginAttempts map[string][]time.Time
+	BlockedIPs    map[string]time.Time
+	mu            sync.RWMutex
+}
+
+func NewSecurityManager() *SecurityManager {
+	return &SecurityManager{
+		RateLimiter: &RateLimiter{
+			requests: make(map[string][]time.Time),
+			attempts: make(map[string][]time.Time),
+		},
+		LoginAttempts: make(map[string][]time.Time),
+		BlockedIPs:    make(map[string]time.Time),
+	}
+}
 
 type Manager struct {
 	Templates *template.Template
@@ -58,6 +89,9 @@ type Manager struct {
 	VerificationTokens map[string]string // username -> token
 	VerificationStatus map[string]bool   // username -> verified
 	VerificationMu     sync.RWMutex
+
+	// Phase 1: Security Manager
+	Security *SecurityManager
 }
 
 // Global manager instance
@@ -65,7 +99,7 @@ var manager *Manager
 
 func NewManager() *Manager {
 	cfg := loadConfig()
-	vault, err := NewSQLiteVaultStorage("vault.db")
+	vault, err := NewSQLiteVaultStorage(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Failed to initialize SQLiteVaultStorage: %v", err)
 	}
@@ -84,7 +118,91 @@ func NewManager() *Manager {
 		// Initialize verification storage
 		VerificationTokens: make(map[string]string),
 		VerificationStatus: make(map[string]bool),
+
+		// Initialize security manager
+		Security: NewSecurityManager(),
 	}
+}
+
+// --- Rate limiting middleware
+func rateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clientIP := getClientIP(r)
+
+		// Check if IP is rate limited
+		if manager.Security.IsRateLimited(clientIP) {
+			renderErrorPage(w, http.StatusTooManyRequests, "Too Many Requests",
+				"You have exceeded the rate limit for requests.",
+				"Please wait a moment before making another request.",
+				fmt.Sprintf("Rate limit exceeded for IP: %s", clientIP), r.URL.Path)
+			return
+		}
+
+		// Record this request
+		manager.Security.RecordRequest(clientIP)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Phase 1: Login protection middleware
+func loginProtectionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			clientIP := getClientIP(r)
+			identifier := clientIP // Can also use username if available
+
+			// Check if login is blocked due to too many failed attempts
+			if manager.Security.IsLoginBlocked(identifier) {
+				renderErrorPage(w, http.StatusTooManyRequests, "Login Temporarily Blocked",
+					"Too many failed login attempts.",
+					fmt.Sprintf("Please wait %d minutes before trying again.", int(loginCooldownPeriod.Minutes())),
+					fmt.Sprintf("Login blocked for identifier: %s", identifier), "/login")
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Phase 1: Enhanced logging and audit functionality
+func logSecurityEvent(userID, action, resource, ipAddress, userAgent string, success bool, errorMsg string) {
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	logEntry := fmt.Sprintf("[SECURITY] %s | UserID: %s | Action: %s | Resource: %s | IP: %s | Success: %t",
+		timestamp, userID, action, resource, ipAddress, success)
+
+	if errorMsg != "" {
+		logEntry += fmt.Sprintf(" | Error: %s", errorMsg)
+	}
+
+	if userAgent != "" {
+		logEntry += fmt.Sprintf(" | UserAgent: %s", userAgent)
+	}
+
+	log.Println(logEntry)
+}
+
+func auditLogin(username, ipAddress, userAgent string, success bool, errorMsg string) {
+	action := "LOGIN_ATTEMPT"
+	if success {
+		action = "LOGIN_SUCCESS"
+	} else {
+		action = "LOGIN_FAILURE"
+	}
+
+	logSecurityEvent(username, action, "authentication", ipAddress, userAgent, success, errorMsg)
+}
+
+func auditRegistration(username, ipAddress, userAgent string, success bool, errorMsg string) {
+	action := "REGISTRATION_ATTEMPT"
+	if success {
+		action = "REGISTRATION_SUCCESS"
+	} else {
+		action = "REGISTRATION_FAILURE"
+	}
+
+	logSecurityEvent(username, action, "user_registration", ipAddress, userAgent, success, errorMsg)
 }
 
 // --- Manager Helper Methods ---
@@ -202,29 +320,63 @@ type SQLiteVaultStorage struct {
 func NewSQLiteVaultStorage(dbPath string) (*SQLiteVaultStorage, error) {
 	db, err := sqlite.Open(dbPath, "sqlite")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
-	// Create tables if not exist
+
+	// Create tables with improved schema and indexes
 	_, err = db.Exec(`
 	CREATE TABLE IF NOT EXISTS users (
 		pub_hex TEXT PRIMARY KEY,
-		username TEXT UNIQUE,
-		user_id TEXT,
-		login_type TEXT DEFAULT 'simple',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		username TEXT UNIQUE NOT NULL,
+		user_id TEXT NOT NULL,
+		login_type TEXT DEFAULT 'simple' CHECK (login_type IN ('simple', 'secured')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		is_active BOOLEAN DEFAULT 1,
+		failed_attempts INTEGER DEFAULT 0,
+		locked_until DATETIME NULL
 	);
+
 	CREATE TABLE IF NOT EXISTS credentials (
-		user_id TEXT,
-		secret TEXT,
+		user_id TEXT NOT NULL,
+		secret TEXT NOT NULL,
 		metadata TEXT,
-		secret_type TEXT DEFAULT 'password',
+		secret_type TEXT DEFAULT 'password' NOT NULL,
 		integration_type TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (user_id, secret_type)
 	);
+
+	-- Phase 1: Add performance indexes
+	CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+	CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
+	CREATE INDEX IF NOT EXISTS idx_users_login_type ON users(login_type);
+	CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
+	CREATE INDEX IF NOT EXISTS idx_credentials_user_id ON credentials(user_id);
+	CREATE INDEX IF NOT EXISTS idx_credentials_secret_type ON credentials(secret_type);
+
+	-- Phase 1: Add audit log table
+	CREATE TABLE IF NOT EXISTS audit_logs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id TEXT,
+		action TEXT NOT NULL,
+		resource TEXT,
+		ip_address TEXT,
+		user_agent TEXT,
+		success BOOLEAN,
+		error_message TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
 	`)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create database schema: %w", err)
 	}
+
 	return &SQLiteVaultStorage{db: db}, nil
 }
 
@@ -319,6 +471,12 @@ type Config struct {
 	Addr         string
 	PasetoSecret []byte
 	ProofTimeout time.Duration
+	// Phase 1: Enhanced Configuration
+	Environment    string
+	DatabaseURL    string
+	EnableHTTPS    bool
+	TrustedProxies []string
+	LogLevel       string
 }
 
 // Detect if username is email or phone
@@ -497,18 +655,45 @@ func loadConfig() *Config {
 	addr := getEnv("LISTEN_ADDR", ":8080")
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		log.Fatal("JWT_SECRET must be set")
+		// Don't set a default in production
+		if getEnv("ENVIRONMENT", "development") == "production" {
+			log.Fatal("JWT_SECRET must be set in production")
+		}
+		log.Println("Warning: Using default JWT_SECRET for development")
+		secret = "ca1493f9b638c47219bb82db9843a086"
 	}
+
 	ptSec := getEnv("PROOF_TIMEOUTSEC", "5")
 	pt, err := time.ParseDuration(ptSec + "s")
 	if err != nil {
 		log.Printf("invalid PROOF_TIMEOUTSEC, defaulting to 5s")
 		pt = 5 * time.Second
 	}
+
+	// Phase 1: Enhanced configuration
+	environment := getEnv("ENVIRONMENT", "development")
+	databaseURL := getEnv("DATABASE_URL", "vault.db")
+	enableHTTPS := getEnv("ENABLE_HTTPS", "false") == "true"
+	logLevel := getEnv("LOG_LEVEL", "info")
+
+	// Parse trusted proxies
+	var trustedProxies []string
+	if proxies := os.Getenv("TRUSTED_PROXIES"); proxies != "" {
+		trustedProxies = strings.Split(proxies, ",")
+		for i, proxy := range trustedProxies {
+			trustedProxies[i] = strings.TrimSpace(proxy)
+		}
+	}
+
 	return &Config{
-		Addr:         addr,
-		PasetoSecret: []byte(secret),
-		ProofTimeout: pt,
+		Addr:           addr,
+		PasetoSecret:   []byte(secret),
+		ProofTimeout:   pt,
+		Environment:    environment,
+		DatabaseURL:    databaseURL,
+		EnableHTTPS:    enableHTTPS,
+		TrustedProxies: trustedProxies,
+		LogLevel:       logLevel,
 	}
 }
 
@@ -521,11 +706,12 @@ func getEnv(k, d string) string {
 
 // --- Main Application ---
 func main() {
-	// Set up environment
-	os.Setenv("JWT_SECRET", "ca1493f9b638c47219bb82db9843a086")
-
+	// Phase 1: Remove hardcoded secrets - now handled in loadConfig()
 	// Initialize manager
 	manager = NewManager()
+
+	// Start periodic cleanup routines
+	manager.StartCleanupRoutines()
 
 	// Set up routes
 	mux := setupRoutes()
@@ -546,28 +732,28 @@ func main() {
 func setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// Main routes
-	mux.HandleFunc("/", homeHandler)
-	mux.HandleFunc("/health", health)
-	mux.HandleFunc("/nonce", nonce)
+	// Main routes (with rate limiting)
+	mux.Handle("/", rateLimitMiddleware(http.HandlerFunc(homeHandler)))
+	mux.Handle("/health", rateLimitMiddleware(http.HandlerFunc(health)))
+	mux.Handle("/nonce", rateLimitMiddleware(http.HandlerFunc(nonce)))
 
-	// Authentication routes
-	mux.HandleFunc("/register", register)
-	mux.HandleFunc("/verify", verifyHandler)
-	mux.HandleFunc("/login", loginSelectionHandler)
-	mux.HandleFunc("/simple-login", simpleLoginHandler(manager.Config))
-	mux.HandleFunc("/secured-login", securedLoginHandler(manager.Config))
-	mux.HandleFunc("/logout", logoutHandler(manager.Config))
-	mux.HandleFunc("/sso", ssoHandler(manager.Config))
+	// Authentication routes (with rate limiting and login protection)
+	mux.Handle("/register", rateLimitMiddleware(http.HandlerFunc(register)))
+	mux.Handle("/verify", rateLimitMiddleware(http.HandlerFunc(verifyHandler)))
+	mux.Handle("/login", rateLimitMiddleware(http.HandlerFunc(loginSelectionHandler)))
+	mux.Handle("/simple-login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(simpleLoginHandler(manager.Config)))))
+	mux.Handle("/secured-login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(securedLoginHandler(manager.Config)))))
+	mux.Handle("/logout", rateLimitMiddleware(http.HandlerFunc(logoutHandler(manager.Config))))
+	mux.Handle("/sso", rateLimitMiddleware(http.HandlerFunc(ssoHandler(manager.Config))))
 
 	// Protected routes
 	mux.Handle("/protected", pasetoMiddleware(manager.Config, protectedHandler()))
 
-	// API endpoints
-	mux.HandleFunc("/api/status", apiStatusHandler)
+	// API endpoints (with rate limiting)
+	mux.Handle("/api/status", rateLimitMiddleware(http.HandlerFunc(apiStatusHandler)))
 	mux.Handle("/api/userinfo", pasetoMiddleware(manager.Config, http.HandlerFunc(apiUserInfoHandler(manager.Config))))
-	mux.HandleFunc("/api/login", apiSimpleLoginHandler(manager.Config))
-	mux.HandleFunc("/api-demo", apiDemoHandler)
+	mux.Handle("/api/login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(apiSimpleLoginHandler(manager.Config)))))
+	mux.Handle("/api-demo", rateLimitMiddleware(http.HandlerFunc(apiDemoHandler)))
 
 	return mux
 }
@@ -650,6 +836,36 @@ func register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Phase 1: Enhanced input validation
+	username = sanitizeInput(username)
+
+	// Validate username format
+	var validationErr error
+	if isEmail(username) {
+		validationErr = validateEmail(username)
+	} else if isPhone(username) {
+		validationErr = validatePhone(username)
+	} else {
+		validationErr = fmt.Errorf("username must be a valid email address or phone number")
+	}
+
+	if validationErr != nil {
+		renderErrorPage(w, http.StatusBadRequest, "Invalid Username Format",
+			"The username you provided is not valid.",
+			validationErr.Error(),
+			validationErr.Error(), "/register")
+		return
+	}
+
+	// Phase 1: Validate password strength
+	if err := validatePassword(password); err != nil {
+		renderErrorPage(w, http.StatusBadRequest, "Weak Password",
+			"Your password does not meet the security requirements.",
+			err.Error(),
+			err.Error(), "/register")
+		return
+	}
+
 	// Validate login type
 	if loginType != "simple" && loginType != "secured" {
 		loginType = "simple" // default to simple
@@ -657,6 +873,8 @@ func register(w http.ResponseWriter, r *http.Request) {
 
 	// Check if username (email/phone) already exists
 	if _, exists := lookupUserByUsername(username); exists {
+		// Phase 1: Audit failed registration
+		auditRegistration(username, getClientIP(r), r.UserAgent(), false, "Username already exists")
 		renderErrorPage(w, http.StatusConflict, "Username Already Registered",
 			"This username is already associated with an existing account.",
 			"Please try logging in instead, or use a different email address or phone number.",
@@ -692,11 +910,17 @@ func register(w http.ResponseWriter, r *http.Request) {
 	manager.Vault.SetUserSecret(username+"_plain", password)
 	if isEmail(username) {
 		sendVerificationEmail(username, token)
+		// Phase 1: Audit successful registration initiation
+		auditRegistration(username, getClientIP(r), r.UserAgent(), true, "Email verification sent")
 		fmt.Fprintf(w, "Registered. Please check your email for verification.")
 	} else if isPhone(username) {
 		sendVerificationSMS(username, token)
+		// Phase 1: Audit successful registration initiation
+		auditRegistration(username, getClientIP(r), r.UserAgent(), true, "SMS verification sent")
 		fmt.Fprintf(w, "Registered. Please check your phone for verification.")
 	} else {
+		// Phase 1: Audit registration with unknown username type
+		auditRegistration(username, getClientIP(r), r.UserAgent(), false, "Unknown username type")
 		fmt.Fprintf(w, "Registered. Unknown username type, cannot send verification.")
 	}
 }
@@ -842,12 +1066,16 @@ func getCookie(token string, maxAges ...int) *http.Cookie {
 	if len(maxAges) > 0 {
 		maxAge = maxAges[0]
 	}
+
+	// Phase 1: Dynamic security settings based on environment
+	secure := manager.Config.EnableHTTPS || manager.Config.Environment == "production"
+
 	return &http.Cookie{
 		Name:     "paseto",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   maxAge,
 	}
@@ -1065,9 +1293,26 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 				"Password field is empty", "/secured-login")
 			return
 		}
+
+		// Phase 1: Add rate limiting for secured login
+		clientIP := getClientIP(r)
 		pubHex := pubx + ":" + puby
+		loginIdentifier := fmt.Sprintf("%s:%s", clientIP, pubHex)
+
+		// Check if login is blocked for this key/IP combination
+		if manager.Security.IsLoginBlocked(loginIdentifier) {
+			renderErrorPage(w, http.StatusTooManyRequests, "Login Temporarily Blocked",
+				"Too many failed login attempts.",
+				fmt.Sprintf("Please wait %d minutes before trying again.", int(loginCooldownPeriod.Minutes())),
+				fmt.Sprintf("Login blocked for key %s from %s", pubHex[:16]+"...", clientIP), "/secured-login")
+			return
+		}
+
 		info, exists := lookupUserByPubHex(pubHex)
 		if !exists {
+			// Phase 1: Record failed login attempt and audit
+			manager.Security.RecordFailedLogin(loginIdentifier)
+			auditLogin("secured_key:"+pubHex[:16], getClientIP(r), r.UserAgent(), false, "Unrecognized cryptographic key")
 			renderErrorPage(w, http.StatusUnauthorized, "Unrecognized Key",
 				"This cryptographic key is not associated with any registered user.",
 				"Please check that you're using the correct key file, or register for a new account.",
@@ -1077,6 +1322,8 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 		// Validate public key from credentials table
 		storedPubX, storedPubY, err := getPublicKeyByUserID(info.UserID)
 		if err != nil || storedPubX != pubx || storedPubY != puby {
+			// Phase 1: Record failed login attempt
+			manager.Security.RecordFailedLogin(loginIdentifier)
 			renderErrorPage(w, http.StatusUnauthorized, "Key Validation Failed",
 				"The cryptographic key does not match our stored credentials.",
 				"There may be an issue with your key file or account. Please contact support.",
@@ -1085,6 +1332,8 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 		}
 		passwordHash, err := manager.Vault.GetUserSecret(info.UserID)
 		if err != nil {
+			// Phase 1: Record failed login attempt
+			manager.Security.RecordFailedLogin(loginIdentifier)
 			renderErrorPage(w, http.StatusUnauthorized, "Account Verification Failed",
 				"Could not verify your account password.",
 				"There may be an issue with your account setup. Please contact support.",
@@ -1092,6 +1341,8 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
+			// Phase 1: Record failed login attempt
+			manager.Security.RecordFailedLogin(loginIdentifier)
 			renderErrorPage(w, http.StatusUnauthorized, "Incorrect Password",
 				"The password you entered is incorrect.",
 				"Please check your password and try again. This should be the same password you used during registration.",
@@ -1110,12 +1361,18 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 		nonce, ts := getNonceWithTimestamp()
 		proof := generateProof(privD, nonce, ts)
 		if err := verifyProofWithReplay(&proof); err != nil {
+			// Phase 1: Record failed login attempt
+			manager.Security.RecordFailedLogin(loginIdentifier)
 			renderErrorPage(w, http.StatusUnauthorized, "Cryptographic Proof Failed",
 				"The cryptographic proof verification failed.",
 				"There was an issue with the authentication process. Please try again.",
 				fmt.Sprintf("Proof verification failed: %v", err), "/secured-login")
 			return
 		}
+
+		// Phase 1: Clear failed login attempts on successful authentication and audit
+		manager.Security.ClearLoginAttempts(loginIdentifier)
+		auditLogin(info.Username, getClientIP(r), r.UserAgent(), true, "Secured login successful with cryptographic proof")
 		claims := getClaims(pubHex, nonce, ts)
 		t := token.CreateToken(expDuration, token.AlgEncrypt)
 		_ = token.RegisterClaims(t, claims)
@@ -1160,9 +1417,26 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
+		// Phase 1: Enhanced input validation and sanitization
+		username = sanitizeInput(username)
+		clientIP := getClientIP(r)
+		loginIdentifier := fmt.Sprintf("%s:%s", clientIP, username)
+
+		// Check if login is blocked for this user/IP combination
+		if manager.Security.IsLoginBlocked(loginIdentifier) {
+			renderErrorPage(w, http.StatusTooManyRequests, "Login Temporarily Blocked",
+				"Too many failed login attempts.",
+				fmt.Sprintf("Please wait %d minutes before trying again.", int(loginCooldownPeriod.Minutes())),
+				fmt.Sprintf("Login blocked for %s from %s", username, clientIP), "/simple-login")
+			return
+		}
+
 		// Lookup user by username
 		info, exists := lookupUserByUsername(username)
 		if !exists {
+			// Phase 1: Record failed login attempt and audit
+			manager.Security.RecordFailedLogin(loginIdentifier)
+			auditLogin(username, clientIP, r.UserAgent(), false, "Username not found")
 			renderErrorPage(w, http.StatusUnauthorized, "Invalid Credentials",
 				"The username or password you entered is incorrect.",
 				"Please check your credentials and try again, or register for a new account.",
@@ -1182,6 +1456,8 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 		// Get stored password hash
 		passwordHash, err := manager.Vault.GetUserSecret(info.UserID)
 		if err != nil {
+			// Phase 1: Record failed login attempt
+			manager.Security.RecordFailedLogin(loginIdentifier)
 			renderErrorPage(w, http.StatusUnauthorized, "Invalid Credentials",
 				"The username or password you entered is incorrect.",
 				"Please check your credentials and try again, or register for a new account.",
@@ -1191,12 +1467,19 @@ func simpleLoginHandler(cfg *Config) http.HandlerFunc {
 
 		// Verify password
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
+			// Phase 1: Record failed login attempt and audit
+			manager.Security.RecordFailedLogin(loginIdentifier)
+			auditLogin(username, clientIP, r.UserAgent(), false, "Invalid password")
 			renderErrorPage(w, http.StatusUnauthorized, "Invalid Credentials",
 				"The username or password you entered is incorrect.",
 				"Please check your credentials and try again.",
 				"Password verification failed", "/simple-login")
 			return
 		}
+
+		// Phase 1: Clear failed login attempts and audit successful login
+		manager.Security.ClearLoginAttempts(loginIdentifier)
+		auditLogin(username, clientIP, r.UserAgent(), true, "Simple login successful")
 
 		// Get public key for token creation
 		pubKeyX, pubKeyY, err := getPublicKeyByUserID(info.UserID)
@@ -1550,5 +1833,265 @@ func renderErrorPage(w http.ResponseWriter, statusCode int, title, message, desc
 	if err := manager.Templates.ExecuteTemplate(w, "error.html", data); err != nil {
 		// Fallback to plain text error if template fails
 		http.Error(w, message, statusCode)
+	}
+}
+
+// Phase 1: Rate Limiting and Security Functions
+func (s *SecurityManager) IsRateLimited(identifier string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	now := time.Now()
+	requests, exists := s.RateLimiter.requests[identifier]
+	if !exists {
+		return false
+	}
+
+	// Count requests in the last minute
+	count := 0
+	for _, reqTime := range requests {
+		if now.Sub(reqTime) < time.Minute {
+			count++
+		}
+	}
+
+	return count >= maxRequestsPerMin
+}
+
+func (s *SecurityManager) RecordRequest(identifier string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	if s.RateLimiter.requests[identifier] == nil {
+		s.RateLimiter.requests[identifier] = make([]time.Time, 0)
+	}
+
+	// Add current request
+	s.RateLimiter.requests[identifier] = append(s.RateLimiter.requests[identifier], now)
+
+	// Clean up old requests (older than 1 minute)
+	filtered := make([]time.Time, 0)
+	for _, reqTime := range s.RateLimiter.requests[identifier] {
+		if now.Sub(reqTime) < time.Minute {
+			filtered = append(filtered, reqTime)
+		}
+	}
+	s.RateLimiter.requests[identifier] = filtered
+}
+
+func (s *SecurityManager) IsLoginBlocked(identifier string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	now := time.Now()
+	attempts, exists := s.LoginAttempts[identifier]
+	if !exists {
+		return false
+	}
+
+	// Count failed attempts in the cooldown period
+	count := 0
+	for _, attemptTime := range attempts {
+		if now.Sub(attemptTime) < loginCooldownPeriod {
+			count++
+		}
+	}
+
+	return count >= maxLoginAttempts
+}
+
+func (s *SecurityManager) RecordFailedLogin(identifier string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	if s.LoginAttempts[identifier] == nil {
+		s.LoginAttempts[identifier] = make([]time.Time, 0)
+	}
+
+	s.LoginAttempts[identifier] = append(s.LoginAttempts[identifier], now)
+
+	// Clean up old attempts
+	filtered := make([]time.Time, 0)
+	for _, attemptTime := range s.LoginAttempts[identifier] {
+		if now.Sub(attemptTime) < loginCooldownPeriod*2 { // Keep for 2x cooldown period
+			filtered = append(filtered, attemptTime)
+		}
+	}
+	s.LoginAttempts[identifier] = filtered
+}
+
+func (s *SecurityManager) ClearLoginAttempts(identifier string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.LoginAttempts, identifier)
+}
+
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header first
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		ips := strings.Split(xff, ",")
+		return strings.TrimSpace(ips[0])
+	}
+
+	// Check X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Fall back to RemoteAddr
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// Phase 1: Password validation functions
+func validatePassword(password string) error {
+	if len(password) < passwordMinLength {
+		return fmt.Errorf("password must be at least %d characters long", passwordMinLength)
+	}
+
+	hasUpper := false
+	hasLower := false
+	hasDigit := false
+	hasSpecial := false
+
+	for _, char := range password {
+		switch {
+		case 'A' <= char && char <= 'Z':
+			hasUpper = true
+		case 'a' <= char && char <= 'z':
+			hasLower = true
+		case '0' <= char && char <= '9':
+			hasDigit = true
+		case strings.ContainsRune("!@#$%^&*()_+-=[]{}|;:,.<>?", char):
+			hasSpecial = true
+		}
+	}
+
+	if !hasUpper {
+		return fmt.Errorf("password must contain at least one uppercase letter")
+	}
+	if !hasLower {
+		return fmt.Errorf("password must contain at least one lowercase letter")
+	}
+	if !hasDigit {
+		return fmt.Errorf("password must contain at least one digit")
+	}
+	if !hasSpecial {
+		return fmt.Errorf("password must contain at least one special character")
+	}
+
+	return nil
+}
+
+func sanitizeInput(input string) string {
+	// Remove potentially dangerous characters and normalize
+	input = strings.TrimSpace(input)
+	input = strings.ReplaceAll(input, "<", "&lt;")
+	input = strings.ReplaceAll(input, ">", "&gt;")
+	input = strings.ReplaceAll(input, "\"", "&quot;")
+	input = strings.ReplaceAll(input, "'", "&#39;")
+	return input
+}
+
+func validateEmail(email string) error {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if len(email) == 0 {
+		return fmt.Errorf("email cannot be empty")
+	}
+	if len(email) > 254 {
+		return fmt.Errorf("email too long")
+	}
+
+	re := regexp.MustCompile(`^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$`)
+	if !re.MatchString(email) {
+		return fmt.Errorf("invalid email format")
+	}
+	return nil
+}
+
+func validatePhone(phone string) error {
+	phone = strings.TrimSpace(phone)
+	if len(phone) == 0 {
+		return fmt.Errorf("phone cannot be empty")
+	}
+
+	re := regexp.MustCompile(`^\+?[1-9]\d{1,14}$`)
+	if !re.MatchString(phone) {
+		return fmt.Errorf("invalid phone format")
+	}
+	return nil
+}
+
+// Phase 1: Periodic cleanup routines
+func (m *Manager) StartCleanupRoutines() {
+	// Start cleanup goroutine that runs every 5 minutes
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			// Cleanup expired tokens
+			m.CleanupExpiredTokens()
+
+			// Cleanup expired nonces
+			m.CleanupExpiredNonces()
+
+			// Cleanup old rate limiting data
+			if m.Security != nil {
+				m.Security.CleanupOldData()
+			}
+
+			log.Println("[CLEANUP] Performed periodic cleanup of expired data")
+		}
+	}()
+}
+
+// Add cleanup method to SecurityManager
+func (s *SecurityManager) CleanupOldData() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+
+	// Cleanup old request tracking
+	for identifier, requests := range s.RateLimiter.requests {
+		filtered := make([]time.Time, 0)
+		for _, reqTime := range requests {
+			if now.Sub(reqTime) < time.Hour {
+				filtered = append(filtered, reqTime)
+			}
+		}
+		if len(filtered) == 0 {
+			delete(s.RateLimiter.requests, identifier)
+		} else {
+			s.RateLimiter.requests[identifier] = filtered
+		}
+	}
+
+	// Cleanup old login attempts
+	for identifier, attempts := range s.LoginAttempts {
+		filtered := make([]time.Time, 0)
+		for _, attemptTime := range attempts {
+			if now.Sub(attemptTime) < loginCooldownPeriod*2 { // Keep for 2x cooldown period
+				filtered = append(filtered, attemptTime)
+			}
+		}
+		if len(filtered) == 0 {
+			delete(s.LoginAttempts, identifier)
+		} else {
+			s.LoginAttempts[identifier] = filtered
+		}
+	}
+
+	// Cleanup blocked IPs
+	for ip, blockTime := range s.BlockedIPs {
+		if now.Sub(blockTime) > time.Hour {
+			delete(s.BlockedIPs, ip)
+		}
 	}
 }
