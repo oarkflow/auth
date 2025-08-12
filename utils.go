@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -9,74 +8,16 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
-	"os"
-	"os/signal"
 	"regexp"
 	"strings"
-	"sync"
-	"syscall"
 	"time"
 
 	"golang.org/x/crypto/pbkdf2"
 )
-
-// Global constants
-const (
-	expDuration     = 15 * time.Minute
-	nonceCleanupSec = 60
-	// Phase 1 Security Constants
-	maxLoginAttempts    = 5
-	loginCooldownPeriod = 15 * time.Minute
-	maxRequestsPerMin   = 30
-	passwordMinLength   = 8
-	// Password Reset Constants
-	passwordResetTokenExp = 30 * time.Minute
-)
-
-// Phase 1: Rate Limiting and Security Structures
-type RateLimiter struct {
-	requests map[string][]time.Time
-	attempts map[string][]time.Time
-	mu       sync.RWMutex
-}
-
-// --- Types ---
-type UserInfo struct {
-	UserID    string `db:"user_id"`
-	Username  string `db:"username"`
-	LoginType string `db:"login_type"`
-}
-
-type schnorrProof struct {
-	R       string `json:"R"`
-	S       string `json:"S"`
-	PubKeyX string `json:"pubKeyX"`
-	PubKeyY string `json:"pubKeyY"`
-	Nonce   string `json:"nonce"`
-	Ts      int64  `json:"ts"`
-}
-
-type ErrorPageData struct {
-	Title       string
-	StatusCode  int
-	Message     string
-	Description string
-	Technical   string
-	RetryURL    string
-	ErrorID     string
-}
-
-type PasswordResetData struct {
-	Username  string
-	Token     string
-	ExpiresAt time.Time
-	Used      bool
-}
 
 // Detect if username is email or phone
 func isEmail(username string) bool {
@@ -134,82 +75,6 @@ func getPublicKeyByUserID(userID string) (string, string, error) {
 		return "", "", err
 	}
 	return pubKey["PubKeyX"], pubKey["PubKeyY"], nil
-}
-
-// --- Main Application ---
-func main() {
-	// Phase 1: Remove hardcoded secrets - now handled in loadConfig()
-	// Initialize manager
-	manager = NewManager()
-
-	// Set up routes
-	mux := setupRoutes()
-
-	// Configure server
-	srv := &http.Server{
-		Addr:         manager.Config.Addr,
-		Handler:      cors(mux),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
-
-	// Start server
-	startServer(srv)
-}
-
-func setupRoutes() *http.ServeMux {
-	mux := http.NewServeMux()
-
-	// Main routes (with rate limiting)
-	mux.Handle("/", rateLimitMiddleware(http.HandlerFunc(homeHandler)))
-	mux.Handle("/health", rateLimitMiddleware(http.HandlerFunc(health)))
-	mux.Handle("/nonce", rateLimitMiddleware(http.HandlerFunc(nonce)))
-
-	// Authentication routes (with rate limiting and login protection)
-	mux.Handle("/register", rateLimitMiddleware(http.HandlerFunc(register)))
-	mux.Handle("/verify", rateLimitMiddleware(http.HandlerFunc(verifyHandler)))
-	mux.Handle("/login", rateLimitMiddleware(http.HandlerFunc(loginSelectionHandler)))
-	mux.Handle("/simple-login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(simpleLoginHandler(manager.Config)))))
-	mux.Handle("/secured-login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(securedLoginHandler(manager.Config)))))
-	mux.Handle("/logout", rateLimitMiddleware(http.HandlerFunc(logoutHandler(manager.Config))))
-	mux.Handle("/sso", rateLimitMiddleware(http.HandlerFunc(ssoHandler(manager.Config))))
-
-	// Password reset routes
-	mux.Handle("/forgot-password", rateLimitMiddleware(http.HandlerFunc(forgotPasswordHandler)))
-	mux.Handle("/reset-password", rateLimitMiddleware(http.HandlerFunc(resetPasswordHandler)))
-
-	// Protected routes
-	mux.Handle("/protected", pasetoMiddleware(manager.Config, protectedHandler()))
-
-	// API endpoints (with rate limiting)
-	mux.Handle("/api/status", rateLimitMiddleware(http.HandlerFunc(apiStatusHandler)))
-	mux.Handle("/api/userinfo", pasetoMiddleware(manager.Config, http.HandlerFunc(apiUserInfoHandler(manager.Config))))
-	mux.Handle("/api/login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(apiSimpleLoginHandler(manager.Config)))))
-	mux.Handle("/api-demo", rateLimitMiddleware(http.HandlerFunc(apiDemoHandler)))
-
-	return mux
-}
-
-func startServer(srv *http.Server) {
-	go func() {
-		log.Printf("▶ listening on http://localhost%s", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("ListenAndServe: %v", err)
-		}
-	}()
-
-	// Wait for interrupt signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	// Graceful shutdown
-	log.Println("⏳ shutting down…")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	srv.Shutdown(ctx)
-	log.Println("✔ shutdown complete")
 }
 
 func getNonceWithTimestamp() (string, int64) {
