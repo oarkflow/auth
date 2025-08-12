@@ -23,10 +23,9 @@ const (
 
 func main() {
 	manager = NewManager()
-	mux := setupRoutes()
 	srv := &http.Server{
 		Addr:         manager.Config.Addr,
-		Handler:      cors(mux),
+		Handler:      setupRoutes(),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -34,8 +33,10 @@ func main() {
 	startServer(srv)
 }
 
-func setupRoutes() *http.ServeMux {
+func setupRoutes() http.Handler {
 	mux := http.NewServeMux()
+
+	// Routes with individual rate limiting and login protection
 	mux.Handle("/", rateLimitMiddleware(http.HandlerFunc(homeHandler)))
 	mux.Handle("/health", rateLimitMiddleware(http.HandlerFunc(health)))
 	mux.Handle("/nonce", rateLimitMiddleware(http.HandlerFunc(nonce)))
@@ -49,11 +50,28 @@ func setupRoutes() *http.ServeMux {
 	mux.Handle("/forgot-password", rateLimitMiddleware(http.HandlerFunc(forgotPasswordHandler)))
 	mux.Handle("/reset-password", rateLimitMiddleware(http.HandlerFunc(resetPasswordHandler)))
 	mux.Handle("/protected", pasetoMiddleware(manager.Config, protectedHandler()))
+
+	// API endpoints
 	mux.Handle("/api/status", rateLimitMiddleware(http.HandlerFunc(apiStatusHandler)))
 	mux.Handle("/api/userinfo", pasetoMiddleware(manager.Config, http.HandlerFunc(apiUserInfoHandler(manager.Config))))
 	mux.Handle("/api/login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(apiSimpleLoginHandler(manager.Config)))))
 	mux.Handle("/api-demo", rateLimitMiddleware(http.HandlerFunc(apiDemoHandler)))
-	return mux
+
+	// Static files serving
+	fs := http.FileServer(http.Dir("static/"))
+	mux.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	// Apply middleware chain to the mux
+	var handler http.Handler = mux
+
+	// Security and logging middleware (outermost)
+	handler = securityHeadersMiddleware(handler)
+	handler = corsMiddleware(handler)
+	handler = auditLoggingMiddleware(handler)
+	handler = requestValidationMiddleware(handler)
+	handler = sessionTimeoutMiddleware(manager.Config, handler)
+
+	return handler
 }
 
 func startServer(srv *http.Server) {
