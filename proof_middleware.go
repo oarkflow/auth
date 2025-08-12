@@ -93,6 +93,15 @@ func proofAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Check if user has "simple" login type - they cannot use proof-based authentication
+		if userInfo.LoginType == "simple" {
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"error":   "access_denied",
+				"message": "Your account is configured for simple login only. Proof-based authentication is not allowed.",
+			})
+			return
+		}
+
 		// CRITICAL SECURITY CHECK: Verify user hasn't logged out after proof timestamp
 		initUserLogoutTracker()
 		if userLogoutTracker.IsUserLoggedOut(userInfo.UserID, reqData.Proof.Ts) {

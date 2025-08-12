@@ -94,6 +94,16 @@ func ssoHandler(cfg *Config) http.HandlerFunc {
 					fmt.Sprintf("Username '%s' not found in database", username), "/register")
 				return
 			}
+
+			// Check if user has "simple" login type - they cannot use SSO tokens from secured login
+			if info.LoginType == "simple" {
+				renderErrorPage(w, http.StatusForbidden, "Simple Login Required",
+					"Your account is configured for simple username/password login.",
+					"Please use the simple login option with your username and password.",
+					"User account configured for simple login only", "/simple-login")
+				return
+			}
+
 			decTok, err := token.DecryptToken(tokenStr, cfg.PasetoSecret)
 			if err != nil {
 				renderErrorPage(w, http.StatusUnauthorized, "Invalid Authentication Token",
@@ -325,6 +335,16 @@ func loginHandler(cfg *Config) http.HandlerFunc {
 				"Public key not found in user registry", "/register")
 			return
 		}
+
+		// Check if user has "simple" login type - they cannot use secured login
+		if info.LoginType == "simple" {
+			renderErrorPage(w, http.StatusForbidden, "Simple Login Required",
+				"Your account is configured for simple username/password login.",
+				"Please use the simple login option with your username and password.",
+				"User account configured for simple login only", "/simple-login")
+			return
+		}
+
 		// Validate public key from credentials table
 		storedPubX, storedPubY, err := getPublicKeyByUserID(info.UserID)
 		if err != nil || storedPubX != pubx || storedPubY != puby {
@@ -1159,7 +1179,7 @@ func register(w http.ResponseWriter, r *http.Request) {
 	}
 	username := strings.TrimSpace(r.FormValue("username"))
 	password := r.FormValue("password")
-	loginType := r.FormValue("loginType")
+	loginType := r.FormValue("login_type")
 
 	if username == "" || password == "" {
 		renderErrorPage(w, http.StatusBadRequest, "Missing Required Information",
