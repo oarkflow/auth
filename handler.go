@@ -631,7 +631,7 @@ func loginSelectionHandler(w http.ResponseWriter, r *http.Request) {
 			"UserInfo": userInfo,
 		})
 	} else {
-		// Show secured login form 
+		// Show secured login form
 		manager.renderTemplate(w, "secured-login.html", map[string]any{
 			"Username": username,
 			"UserInfo": userInfo,
