@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -103,6 +104,48 @@ func cors(next http.Handler) http.Handler {
 			w.WriteHeader(204)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// --- Rate limiting middleware
+func rateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clientIP := getClientIP(r)
+
+		// Check if IP is rate limited
+		if manager.Security.IsRateLimited(clientIP) {
+			renderErrorPage(w, http.StatusTooManyRequests, "Too Many Requests",
+				"You have exceeded the rate limit for requests.",
+				"Please wait a moment before making another request.",
+				fmt.Sprintf("Rate limit exceeded for IP: %s", clientIP), r.URL.Path)
+			return
+		}
+
+		// Record this request
+		manager.Security.RecordRequest(clientIP)
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Phase 1: Login protection middleware
+func loginProtectionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			clientIP := getClientIP(r)
+			identifier := clientIP // Can also use username if available
+
+			// Check if login is blocked due to too many failed attempts
+			if manager.Security.IsLoginBlocked(identifier) {
+				renderErrorPage(w, http.StatusTooManyRequests, "Login Temporarily Blocked",
+					"Too many failed login attempts.",
+					fmt.Sprintf("Please wait %d minutes before trying again.", int(loginCooldownPeriod.Minutes())),
+					fmt.Sprintf("Login blocked for identifier: %s", identifier), "/login")
+				return
+			}
+		}
+
 		next.ServeHTTP(w, r)
 	})
 }

@@ -3,37 +3,8 @@ package pkg
 import (
 	"net/http"
 
-	"github.com/oarkflow/paseto/token"
 	"golang.org/x/crypto/bcrypt"
 )
-
-// Session utility functions for MFA implementation
-
-// getSessionUsername extracts username from session token
-func getSessionUsername(r *http.Request, cfg *Config) (string, bool) {
-	tokenStr := ""
-	cookie, err := r.Cookie("session_token")
-	if err == nil {
-		tokenStr = cookie.Value
-	} else if r.Header.Get("Authorization") != "" {
-		tokenStr = r.Header.Get("Authorization")
-	}
-
-	if tokenStr == "" {
-		return "", false
-	}
-
-	decTok, err := token.DecryptToken(tokenStr, cfg.PasetoSecret)
-	if err != nil {
-		return "", false
-	}
-
-	if username, ok := decTok.Claims["username"].(string); ok {
-		return username, true
-	}
-
-	return "", false
-}
 
 // setSessionData stores temporary data in a session cookie (for MFA setup)
 // Note: This is a simple implementation. In production, consider using secure session storage.
