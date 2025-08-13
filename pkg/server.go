@@ -45,8 +45,6 @@ func setupRoutes() http.Handler {
 	mux.Handle("/login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(loginSelectionHandler))))
 	mux.Handle("/login/simple", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(processSimpleLoginHandler(manager.Config)))))
 	mux.Handle("/login/secured", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(processSecuredLoginHandler(manager.Config)))))
-	mux.Handle("/simple-login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(simpleLoginHandler(manager.Config)))))
-	mux.Handle("/secured-login", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(securedLoginHandler(manager.Config)))))
 	mux.Handle("/logout", rateLimitMiddleware(http.HandlerFunc(logoutHandler(manager.Config))))
 	mux.Handle("/sso", rateLimitMiddleware(http.HandlerFunc(ssoHandler(manager.Config))))
 	mux.Handle("/forgot-password", rateLimitMiddleware(http.HandlerFunc(forgotPasswordHandler)))
@@ -74,7 +72,6 @@ func setupRoutes() http.Handler {
 
 	// Proof-based API endpoints (stateless)
 	mux.Handle("/api/proof/userinfo", rateLimitMiddleware(proofAuthMiddleware(http.HandlerFunc(proofApiUserInfoHandler()))))
-	mux.Handle("/api-demo", rateLimitMiddleware(http.HandlerFunc(apiDemoHandler)))
 
 	// Static files serving
 	fs := http.FileServer(http.Dir("static/"))

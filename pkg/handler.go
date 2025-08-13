@@ -261,10 +261,6 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	manager.renderTemplate(w, "index.html", nil)
 }
 
-func apiDemoHandler(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "api-demo.html")
-}
-
 // --- Basic Handlers ---
 func health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
