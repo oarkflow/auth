@@ -1,4 +1,4 @@
-package pkg
+package v2
 
 import (
 	"crypto/ecdsa"
@@ -6,13 +6,24 @@ import (
 	"html/template"
 	"log"
 	"math/big"
-	"net/http"
 	"sync"
 	"time"
+
+	"github.com/oarkflow/auth/v2/config"
+	"github.com/oarkflow/auth/v2/models"
+	"github.com/oarkflow/auth/v2/storage"
+)
+
+const (
+	nonceCleanupSec       = 60
+	maxLoginAttempts      = 5
+	loginCooldownPeriod   = 15 * time.Minute
+	maxRequestsPerMin     = 30
+	passwordResetTokenExp = 30 * time.Minute
 )
 
 type SecurityManager struct {
-	RateLimiter   *RateLimiter
+	RateLimiter   *models.RateLimiter
 	LoginAttempts map[string][]time.Time
 	BlockedIPs    map[string]time.Time
 	mu            sync.RWMutex
@@ -20,9 +31,9 @@ type SecurityManager struct {
 
 func NewSecurityManager() *SecurityManager {
 	return &SecurityManager{
-		RateLimiter: &RateLimiter{
-			requests: make(map[string][]time.Time),
-			attempts: make(map[string][]time.Time),
+		RateLimiter: &models.RateLimiter{
+			Requests: make(map[string][]time.Time),
+			Attempts: make(map[string][]time.Time),
 		},
 		LoginAttempts: make(map[string][]time.Time),
 		BlockedIPs:    make(map[string]time.Time),
@@ -35,7 +46,7 @@ func (s *SecurityManager) IsRateLimited(identifier string) bool {
 	defer s.mu.RUnlock()
 
 	now := time.Now()
-	requests, exists := s.RateLimiter.requests[identifier]
+	requests, exists := s.RateLimiter.Requests[identifier]
 	if !exists {
 		return false
 	}
@@ -56,21 +67,21 @@ func (s *SecurityManager) RecordRequest(identifier string) {
 	defer s.mu.Unlock()
 
 	now := time.Now()
-	if s.RateLimiter.requests[identifier] == nil {
-		s.RateLimiter.requests[identifier] = make([]time.Time, 0)
+	if s.RateLimiter.Requests[identifier] == nil {
+		s.RateLimiter.Requests[identifier] = make([]time.Time, 0)
 	}
 
 	// Add current request
-	s.RateLimiter.requests[identifier] = append(s.RateLimiter.requests[identifier], now)
+	s.RateLimiter.Requests[identifier] = append(s.RateLimiter.Requests[identifier], now)
 
 	// Clean up old requests (older than 1 minute)
 	filtered := make([]time.Time, 0)
-	for _, reqTime := range s.RateLimiter.requests[identifier] {
+	for _, reqTime := range s.RateLimiter.Requests[identifier] {
 		if now.Sub(reqTime) < time.Minute {
 			filtered = append(filtered, reqTime)
 		}
 	}
-	s.RateLimiter.requests[identifier] = filtered
+	s.RateLimiter.Requests[identifier] = filtered
 }
 
 func (s *SecurityManager) IsLoginBlocked(identifier string) bool {
@@ -123,9 +134,8 @@ func (s *SecurityManager) ClearLoginAttempts(identifier string) {
 
 type Manager struct {
 	Templates *template.Template
-	Vault     VaultStorage
-	Config    *Config
-
+	Vault     storage.VaultStorage
+	Config    *config.Config
 	// Authentication state
 	UserRegistry     map[string]ecdsa.PublicKey
 	UserRegistryMu   sync.RWMutex
@@ -141,19 +151,16 @@ type Manager struct {
 	VerificationMu     sync.RWMutex
 
 	// Password Reset storage
-	PasswordResetTokens map[string]PasswordResetData // token -> reset data
+	PasswordResetTokens map[string]models.PasswordResetData // token -> reset data
 	PasswordResetMu     sync.RWMutex
 
 	// Phase 1: Security Manager
 	Security *SecurityManager
 }
 
-// Global manager instance
-var manager *Manager
-
 func NewManager() *Manager {
-	cfg := loadConfig()
-	vault, err := NewDatabaseVaultStorage(cfg.DatabaseURL)
+	cfg := config.LoadConfig()
+	vault, err := storage.NewDatabaseVaultStorage(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Failed to initialize DatabaseVaultStorage: %v", err)
 	}
@@ -174,19 +181,10 @@ func NewManager() *Manager {
 		VerificationStatus: make(map[string]bool),
 
 		// Initialize password reset storage
-		PasswordResetTokens: make(map[string]PasswordResetData),
+		PasswordResetTokens: make(map[string]models.PasswordResetData),
 
 		// Initialize security manager
 		Security: NewSecurityManager(),
-	}
-}
-
-// renderTemplate renders a template with the given data
-func (m *Manager) renderTemplate(w http.ResponseWriter, tmpl string, data any) {
-	err := m.Templates.ExecuteTemplate(w, tmpl, data)
-	if err != nil {
-		http.Error(w, "Error rendering template", http.StatusInternalServerError)
-		return
 	}
 }
 
@@ -267,7 +265,7 @@ func (m *Manager) VerifyToken(username, token string) bool {
 func (m *Manager) SetPasswordResetToken(username, token string) {
 	m.PasswordResetMu.Lock()
 	defer m.PasswordResetMu.Unlock()
-	m.PasswordResetTokens[token] = PasswordResetData{
+	m.PasswordResetTokens[token] = models.PasswordResetData{
 		Username:  username,
 		Token:     token,
 		ExpiresAt: time.Now().Add(passwordResetTokenExp),
@@ -275,13 +273,13 @@ func (m *Manager) SetPasswordResetToken(username, token string) {
 	}
 }
 
-func (m *Manager) ValidatePasswordResetToken(token string) (PasswordResetData, bool) {
+func (m *Manager) ValidatePasswordResetToken(token string) (models.PasswordResetData, bool) {
 	m.PasswordResetMu.Lock()
 	defer m.PasswordResetMu.Unlock()
 
 	data, exists := m.PasswordResetTokens[token]
 	if !exists || data.Used || time.Now().After(data.ExpiresAt) {
-		return PasswordResetData{}, false
+		return models.PasswordResetData{}, false
 	}
 	return data, true
 }
@@ -321,4 +319,23 @@ func (m *Manager) RegisterUserKey(pubHex string, pubKeyX, pubKeyY []byte) {
 		X:     new(big.Int).SetBytes(pubKeyX),
 		Y:     new(big.Int).SetBytes(pubKeyY),
 	}
+}
+
+func (manager *Manager) LookupUserByUsername(username string) (models.UserInfo, bool) {
+	info, err := manager.Vault.GetUserInfoByUsername(username)
+	return info, err == nil
+}
+
+func (manager *Manager) LookupUserByPubHex(pubHex string) (models.UserInfo, bool) {
+	info, err := manager.Vault.GetUserInfo(pubHex)
+	return info, err == nil
+}
+
+// Helper to get public key by user info
+func (manager *Manager) GetPublicKeyByUserID(userID string) (string, string, error) {
+	pubKey, err := manager.Vault.GetUserPublicKey(userID)
+	if err != nil {
+		return "", "", err
+	}
+	return pubKey["PubKeyX"], pubKey["PubKeyY"], nil
 }

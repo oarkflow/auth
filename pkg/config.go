@@ -61,20 +61,20 @@ func loadConfig() *Config {
 		log.Println("Warning: Using default JWT_SECRET for development")
 		secret = "ca1493f9b638c47219bb82db9843a086"
 	}
-
+	
 	ptSec := getEnv("PROOF_TIMEOUTSEC", "5")
 	pt, err := time.ParseDuration(ptSec + "s")
 	if err != nil {
 		log.Printf("invalid PROOF_TIMEOUTSEC, defaulting to 5s")
 		pt = 5 * time.Second
 	}
-
+	
 	// Phase 1: Enhanced configuration
 	environment := getEnv("ENVIRONMENT", "development")
 	databaseURL := getEnv("DATABASE_URL", "vault.db")
 	enableHTTPS := getEnv("ENABLE_HTTPS", "false") == "true"
 	logLevel := getEnv("LOG_LEVEL", "info")
-
+	
 	// Parse trusted proxies
 	var trustedProxies []string
 	if proxies := os.Getenv("TRUSTED_PROXIES"); proxies != "" {
@@ -83,7 +83,7 @@ func loadConfig() *Config {
 			trustedProxies[i] = strings.TrimSpace(proxy)
 		}
 	}
-
+	
 	// Production-ready security configurations
 	corsOrigins := strings.Split(getEnv("CORS_ORIGINS", "*"), ",")
 	var sessionTimeout time.Duration
@@ -98,7 +98,7 @@ func loadConfig() *Config {
 	enableSecurityHeaders := getEnv("ENABLE_SECURITY_HEADERS", "true") == "true"
 	enableAuditLogging := getEnv("ENABLE_AUDIT_LOGGING", "false") == "true"
 	jwtRefreshEnabled := getEnv("JWT_REFRESH_ENABLED", "true") == "true"
-
+	
 	passwordPolicy := PasswordPolicyConfig{
 		MinLength:      getEnvAsInt("PASSWORD_MIN_LENGTH", 8),
 		RequireUpper:   getEnv("PASSWORD_REQUIRE_UPPER", "true") == "true",
@@ -107,20 +107,20 @@ func loadConfig() *Config {
 		RequireSpecial: getEnv("PASSWORD_REQUIRE_SPECIAL", "true") == "true",
 		MaxAge:         getEnvAsDuration("PASSWORD_MAX_AGE", "90d"),
 	}
-
+	
 	// Central Auth System Configuration
 	serviceName := getEnv("SERVICE_NAME", "Central Authentication System")
 	allowedRedirects := strings.Split(getEnv("ALLOWED_REDIRECTS", ""), ",")
-	tokenIssuer := getEnv("TOKEN_ISSUER", "central-auth")
+	tokenIssuer := getEnv("TOKEN_ISSUER", "central-github.com/oarkflow/auth")
 	enableSSOCallback := getEnv("ENABLE_SSO_CALLBACK", "true") == "true"
-	ssoCallbackURL := getEnv("SSO_CALLBACK_URL", "/auth/callback")
-
+	ssoCallbackURL := getEnv("SSO_CALLBACK_URL", "/github.com/oarkflow/auth/callback")
+	
 	clientRegistration := ClientRegistrationConfig{
 		RequireApproval: getEnv("CLIENT_REQUIRE_APPROVAL", "true") == "true",
 		DefaultScopes:   strings.Split(getEnv("CLIENT_DEFAULT_SCOPES", "profile,email"), ","),
 		AllowedScopes:   strings.Split(getEnv("CLIENT_ALLOWED_SCOPES", "profile,email,read,write"), ","),
 	}
-
+	
 	return &Config{
 		Addr:                  addr,
 		PasetoSecret:          []byte(secret),

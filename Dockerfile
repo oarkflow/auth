@@ -5,7 +5,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go build -o auth-server .
+RUN go build -o github.com/oarkflow/auth-server .
 
 FROM alpine:latest
 
@@ -19,7 +19,7 @@ COPY --from=builder /app/auth-server .
 COPY --from=builder /app/static ./static
 
 # Create directory for database
-RUN mkdir -p /var/lib/auth
+RUN mkdir -p /var/lib/github.com/oarkflow/auth
 
 # Expose port
 EXPOSE 8080

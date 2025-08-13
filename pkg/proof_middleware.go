@@ -31,12 +31,12 @@ func proofAuthMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-
+		
 		// For POST/API requests, require proof
 		var reqData struct {
 			Proof *schnorrProof `json:"proof"`
 		}
-
+		
 		// Try to get proof from JSON body
 		if r.Header.Get("Content-Type") == "application/json" {
 			if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
@@ -53,7 +53,7 @@ func proofAuthMiddleware(next http.Handler) http.Handler {
 				})
 				return
 			}
-
+			
 			proofData := r.FormValue("proof")
 			if proofData != "" {
 				var proof schnorrProof
@@ -66,14 +66,14 @@ func proofAuthMiddleware(next http.Handler) http.Handler {
 				reqData.Proof = &proof
 			}
 		}
-
+		
 		if reqData.Proof == nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{
 				"error": "cryptographic proof required",
 			})
 			return
 		}
-
+		
 		// Verify the proof
 		if err := verifyProofWithReplay(reqData.Proof); err != nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{
@@ -82,7 +82,7 @@ func proofAuthMiddleware(next http.Handler) http.Handler {
 			})
 			return
 		}
-
+		
 		// Check if the public key is registered
 		pubHex := reqData.Proof.PubKeyX + ":" + reqData.Proof.PubKeyY
 		userInfo, exists := lookupUserByPubHex(pubHex)
@@ -92,7 +92,7 @@ func proofAuthMiddleware(next http.Handler) http.Handler {
 			})
 			return
 		}
-
+		
 		// Check if user has "simple" login type - they cannot use proof-based authentication
 		if userInfo.LoginType == "simple" {
 			writeJSON(w, http.StatusForbidden, map[string]string{
@@ -101,7 +101,7 @@ func proofAuthMiddleware(next http.Handler) http.Handler {
 			})
 			return
 		}
-
+		
 		// CRITICAL SECURITY CHECK: Verify user hasn't logged out after proof timestamp
 		initUserLogoutTracker()
 		if userLogoutTracker.IsUserLoggedOut(userInfo.UserID, reqData.Proof.Ts) {
@@ -111,7 +111,7 @@ func proofAuthMiddleware(next http.Handler) http.Handler {
 			})
 			return
 		}
-
+		
 		// Check if the user is logged out
 		authTimestamp := reqData.Proof.Ts
 		if userLogoutTracker.IsUserLoggedOut(userInfo.UserID, authTimestamp) {
@@ -120,14 +120,14 @@ func proofAuthMiddleware(next http.Handler) http.Handler {
 			})
 			return
 		}
-
+		
 		// Add user info to request context for handlers to use
 		r = r.WithContext(setUserInfoContext(r.Context(), userInfo))
 		next.ServeHTTP(w, r)
 	})
 }
 
-// Track user logout timestamps for proof-based auth security
+// Track user logout timestamps for proof-based github.com/oarkflow/auth security
 type UserLogoutTracker struct {
 	logoutTimes map[string]int64 // userID -> logout timestamp
 	mu          sync.RWMutex
@@ -148,13 +148,13 @@ func (ult *UserLogoutTracker) SetUserLogout(userID string) {
 func (ult *UserLogoutTracker) IsUserLoggedOut(userID string, authTimestamp int64) bool {
 	ult.mu.RLock()
 	defer ult.mu.RUnlock()
-
+	
 	logoutTime, exists := ult.logoutTimes[userID]
 	if !exists {
 		return false // User never logged out
 	}
-
-	// If auth timestamp is before logout time, user is logged out
+	
+	// If github.com/oarkflow/auth timestamp is before logout time, user is logged out
 	return authTimestamp < logoutTime
 }
 

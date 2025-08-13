@@ -1,7 +1,7 @@
 package main
 
 import (
-	"auth/pkg"
+	"github.com/oarkflow/auth/pkg"
 )
 
 func main() {

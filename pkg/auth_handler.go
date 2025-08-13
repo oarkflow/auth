@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/oarkflow/paseto/token"
@@ -195,7 +194,7 @@ func logoutHandler(cfg *Config) http.HandlerFunc {
 			if userInfo, exists := lookupUserByPubHex(sub); exists {
 				// Initialize logout tracker if needed
 				initUserLogoutTracker()
-				// Set user as logged out for proof-based auth
+				// Set user as logged out for proof-based github.com/oarkflow/auth
 				userLogoutTracker.SetUserLogout(userInfo.UserID)
 			}
 		}
@@ -465,12 +464,6 @@ func processSimpleLoginHandler(cfg *Config) http.HandlerFunc {
 		username := strings.TrimSpace(r.FormValue("username"))
 		password := r.FormValue("password")
 
-		// OAuth parameters
-		clientID := r.FormValue("client_id")
-		redirectURI := r.FormValue("redirect_uri")
-		scope := r.FormValue("scope")
-		state := r.FormValue("state")
-
 		if username == "" || password == "" {
 			renderErrorPage(w, http.StatusBadRequest, "Missing Login Information",
 				"Username and password are required for login.",
@@ -542,10 +535,6 @@ func processSimpleLoginHandler(cfg *Config) http.HandlerFunc {
 		if err == nil && mfaEnabled {
 			// Store login state temporarily for MFA verification
 			setSessionData(w, "login_username", username)
-			setSessionData(w, "login_client_id", clientID)
-			setSessionData(w, "login_redirect_uri", redirectURI)
-			setSessionData(w, "login_scope", scope)
-			setSessionData(w, "login_state", state)
 
 			// Redirect to MFA verification
 			manager.renderTemplate(w, "mfa-verify.html", map[string]interface{}{
@@ -592,22 +581,8 @@ func processSimpleLoginHandler(cfg *Config) http.HandlerFunc {
 		}
 		http.SetCookie(w, getCookie(tokenStr))
 
-		// Handle OAuth flow or regular login
-		if clientID != "" && redirectURI != "" {
-			// OAuth authorization flow
-			authURL := fmt.Sprintf("/oauth/authorize?client_id=%s&redirect_uri=%s&response_type=code",
-				url.QueryEscape(clientID), url.QueryEscape(redirectURI))
-			if scope != "" {
-				authURL += "&scope=" + url.QueryEscape(scope)
-			}
-			if state != "" {
-				authURL += "&state=" + url.QueryEscape(state)
-			}
-			http.Redirect(w, r, authURL, http.StatusFound)
-		} else {
-			// Regular login - redirect to protected area
-			http.Redirect(w, r, "/protected", http.StatusSeeOther)
-		}
+		// Regular login - redirect to protected area
+		http.Redirect(w, r, "/protected", http.StatusSeeOther)
 	}
 }
 

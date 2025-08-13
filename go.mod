@@ -1,4 +1,4 @@
-module auth
+module github.com/oarkflow/auth
 
 go 1.24.2
 

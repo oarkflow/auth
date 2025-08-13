@@ -49,8 +49,8 @@ echo -e "${GREEN}Build completed successfully${NC}"
 
 # Database migration/setup
 echo -e "${YELLOW}Setting up database...${NC}"
-mkdir -p /var/lib/auth
-chmod 750 /var/lib/auth
+mkdir -p /var/lib/github.com/oarkflow/auth
+chmod 750 /var/lib/github.com/oarkflow/auth
 
 # Security checks
 echo -e "${YELLOW}Running security checks...${NC}"

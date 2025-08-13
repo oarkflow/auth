@@ -36,7 +36,7 @@ A robust, production-ready authentication service built in Go that supports both
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd auth
+cd github.com/oarkflow/auth
 ```
 
 2. Install dependencies:
@@ -52,8 +52,8 @@ cp .env.development .env
 
 4. Build and run:
 ```bash
-go build -o auth-server .
-./auth-server
+go build -o github.com/oarkflow/auth-server .
+./github.com/oarkflow/auth-server
 ```
 
 The service will start on `http://localhost:8080`
@@ -211,8 +211,8 @@ token=<reset-token>&password=<new-password>&confirmPassword=<new-password>
 
 ### Build and run with Docker:
 ```bash
-docker build -t auth-service .
-docker run -d -p 8080:8080 --name auth-service auth-service
+docker build -t github.com/oarkflow/auth-service .
+docker run -d -p 8080:8080 --name github.com/oarkflow/auth-service github.com/oarkflow/auth-service
 ```
 
 ### Docker Compose (with SSL):
@@ -248,7 +248,7 @@ go test ./...
 
 ### Building
 ```bash
-go build -o auth-server .
+go build -o github.com/oarkflow/auth-server .
 ```
 
 ### Development with Hot Reload
@@ -278,10 +278,10 @@ Adjust RATE_LIMIT_REQUESTS and RATE_LIMIT_WINDOW for your use case.
 Check logs for detailed error information:
 ```bash
 # View systemd logs (if using systemd)
-journalctl -u auth-service -f
+journalctl -u github.com/oarkflow/auth-service -f
 
 # View Docker logs
-docker logs auth-service -f
+docker logs github.com/oarkflow/auth-service -f
 ```
 
 ## Contributing
