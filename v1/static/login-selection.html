@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Central Authentication System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
+    <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full space-y-8">
+            <!-- Header -->
+            <div class="text-center">
+                <div class="mx-auto h-16 w-16 bg-primary-500 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1">
+                        </path>
+                    </svg>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-900">Sign In</h1>
+                <p class="mt-2 text-gray-600">Enter your username to continue</p>
+            </div>
+
+            <!-- Username Form -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                <form action="/login" method="POST" class="space-y-6">
+                    <!-- Username Field -->
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
+                            Username (Email or Phone)
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                </svg>
+                            </div>
+                            <input type="text" id="username" name="username" required
+                                class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent placeholder-gray-400 transition duration-200"
+                                placeholder="your-email@example.com" autofocus>
+                        </div>
+                    </div>
+
+                    <!-- Continue Button -->
+                    <div>
+                        <button type="submit"
+                            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
+                            <span class="absolute left-0 inset-y-0 flex items-center pl-3">
+                                <svg class="h-5 w-5 text-primary-500 group-hover:text-primary-400" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                                </svg>
+                            </span>
+                            Continue
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Additional Options -->
+            <div class="text-center space-y-3">
+                <div>
+                    <a href="/register" class="text-sm text-gray-600 hover:text-gray-800">
+                        Don't have an account? <span
+                            class="font-medium text-primary-600 hover:text-primary-500">Register here</span>
+                    </a>
+                </div>
+                <div>
+                    <a href="/forgot-password" class="text-sm text-gray-500 hover:text-gray-700">
+                        Forgot your password?
+                    </a>
+                </div>
+                <div>
+                    <a href="/v1/static" class="text-sm text-gray-500 hover:text-gray-700">
+                        ← Back to home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

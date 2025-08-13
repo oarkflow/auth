@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSO Authentication - SecureVault</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <div class="bg-white rounded-2xl shadow-xl p-8">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-primary-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
+                        </path>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-900 mb-2">Single Sign-On</h1>
+                <p class="text-gray-600">Authenticate using your organization's SSO provider</p>
+            </div>
+
+            <!-- SSO Providers -->
+            <div class="space-y-4">
+                <!-- Google SSO -->
+                <button
+                    class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-white text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors">
+                    <svg class="w-5 h-5 mr-3" viewBox="0 0 24 24">
+                        <path fill="#4285F4"
+                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853"
+                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05"
+                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                        <path fill="#EA4335"
+                            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                    Continue with Google
+                </button>
+
+                <!-- Microsoft SSO -->
+                <button
+                    class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-white text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors">
+                    <svg class="w-5 h-5 mr-3" viewBox="0 0 24 24">
+                        <path fill="#F25022" d="M11.4 11.4H.6V.6h10.8v10.8z" />
+                        <path fill="#00A4EF" d="M23.4 11.4H12.6V.6h10.8v10.8z" />
+                        <path fill="#7FBA00" d="M11.4 23.4H.6V12.6h10.8v10.8z" />
+                        <path fill="#FFB900" d="M23.4 23.4H12.6V12.6h10.8v10.8z" />
+                    </svg>
+                    Continue with Microsoft
+                </button>
+
+                <!-- GitHub SSO -->
+                <button
+                    class="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg shadow-sm bg-white text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors">
+                    <svg class="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path
+                            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                    </svg>
+                    Continue with GitHub
+                </button>
+            </div>
+
+            <!-- Divider -->
+            <div class="relative my-6">
+                <div class="absolute inset-0 flex items-center">
+                    <div class="w-full border-t border-gray-300"></div>
+                </div>
+                <div class="relative flex justify-center text-sm">
+                    <span class="px-2 bg-white text-gray-500">Or</span>
+                </div>
+            </div>
+
+            <!-- Alternative Login -->
+            <div class="space-y-3">
+                <a href="/login"
+                    class="w-full bg-gray-100 text-gray-700 py-3 px-4 rounded-lg font-medium hover:bg-gray-200 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors text-center block">
+                    Use Regular Login
+                </a>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-8 text-sm text-gray-500">
+            SecureVault Authentication System
+        </div>
+    </div>
+</body>
+
+</html>
+padding: 0;
+box-sizing: border-box;
+}
+
+body {
+font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%);
+min-height: 100vh;
+display: flex;
+align-items: center;
+justify-content: center;
+animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+
+0%,
+100% {
+background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%);
+}
+
+33% {
+background: linear-gradient(135deg, #7c3aed 0%, #ec4899 50%, #4f46e5 100%);
+}
+
+66% {
+background: linear-gradient(135deg, #ec4899 0%, #4f46e5 50%, #7c3aed 100%);
+}
+}
+
+.sso-container {
+background: rgba(255, 255, 255, 0.95);
+backdrop-filter: blur(20px);
+border: 1px solid rgba(255, 255, 255, 0.2);
+border-radius: 24px;
+padding: 50px;
+max-width: 600px;
+width: 90%;
+box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.1);
+position: relative;
+overflow: hidden;
+}
+
+.sso-container::before {
+content: '';
+position: absolute;
+top: 0;
+left: 0;
+right: 0;
+height: 4px;
+background: linear-gradient(90deg, #4f46e5, #7c3aed, #ec4899, #4f46e5);
+background-size: 200% 100%;
+animation: borderFlow 3s linear infinite;
+}
+
+@keyframes borderFlow {
+0% {
+background-position: 200% 0;
+}
+
+100% {
+background-position: -200% 0;
+}
+}
+
+.header {
+text-align: center;
+margin-bottom: 40px;
+}
+
+.sso-icon {
+font-size: 4rem;
+margin-bottom: 20px;
+display: block;
+animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+0%,
+100% {
+transform: scale(1);
+opacity: 1;
+}
+
+50% {
+transform: scale(1.1);
+opacity: 0.9;
+}
+}
+
+h1 {
+color: #1f2937;
+font-size: 2.5rem;
+font-weight: 700;
+margin-bottom: 15px;
+letter-spacing: -0.02em;
+}
+
+.subtitle {
+color: #6b7280;
+font-size: 1.2rem;
+line-height: 1.6;
+}
+
+.security-banner {
+background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+border-left: 5px solid #0ea5e9;
+padding: 20px;
+border-radius: 12px;
+margin-bottom: 40px;
+}
+
+.security-banner h3 {
+color: #0c4a6e;
+font-size: 1.1rem;
+margin-bottom: 10px;
+display: flex;
+align-items: center;
+gap: 10px;
+}
+
+.security-banner p {
+color: #374151;
+font-size: 0.95rem;
+line-height: 1.5;
+}
+
+.form-container {
+background: rgba(255, 255, 255, 0.7);
+border-radius: 16px;
+padding: 35px;
+border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.form-group {
+margin-bottom: 25px;
+}
+
+label {
+display: block;
+color: #374151;
+font-weight: 600;
+margin-bottom: 10px;
+font-size: 1rem;
+}
+
+input[type="text"] {
+width: 100%;
+padding: 16px 20px;
+border: 2px solid #e5e7eb;
+border-radius: 12px;
+font-size: 1rem;
+transition: all 0.3s ease;
+background: rgba(255, 255, 255, 0.9);
+}
+
+input[type="text"]:focus {
+outline: none;
+border-color: #4f46e5;
+box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+background: white;
+}
+
+textarea {
+width: 100%;
+padding: 16px 20px;
+border: 2px solid #e5e7eb;
+border-radius: 12px;
+font-size: 1rem;
+font-family: 'JetBrains Mono', 'Courier New', monospace;
+transition: all 0.3s ease;
+background: rgba(255, 255, 255, 0.9);
+resize: vertical;
+min-height: 120px;
+}
+
+textarea:focus {
+outline: none;
+border-color: #4f46e5;
+box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+background: white;
+}
+
+.token-info {
+background: #fef3c7;
+border: 1px solid #f59e0b;
+border-radius: 8px;
+padding: 12px;
+margin-top: 10px;
+font-size: 0.9rem;
+color: #92400e;
+}
+
+.btn {
+width: 100%;
+padding: 18px;
+background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+color: white;
+border: none;
+border-radius: 12px;
+font-size: 1.1rem;
+font-weight: 600;
+cursor: pointer;
+transition: all 0.3s ease;
+margin-top: 20px;
+position: relative;
+overflow: hidden;
+}
+
+.btn::before {
+content: '';
+position: absolute;
+top: 0;
+left: -100%;
+width: 100%;
+height: 100%;
+background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+transition: left 0.5s;
+}
+
+.btn:hover::before {
+left: 100%;
+}
+
+.btn:hover {
+transform: translateY(-3px);
+box-shadow: 0 15px 35px rgba(79, 70, 229, 0.4);
+}
+
+.btn:active {
+transform: translateY(0);
+}
+
+.navigation {
+display: flex;
+justify-content: center;
+gap: 30px;
+margin-top: 30px;
+flex-wrap: wrap;
+}
+
+.nav-link {
+color: #4f46e5;
+text-decoration: none;
+font-weight: 500;
+transition: all 0.3s ease;
+padding: 8px 16px;
+border-radius: 8px;
+}
+
+.nav-link:hover {
+background: rgba(79, 70, 229, 0.1);
+transform: translateY(-1px);
+}
+
+.features {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+gap: 20px;
+margin-top: 40px;
+}
+
+.feature {
+text-align: center;
+padding: 20px;
+background: rgba(255, 255, 255, 0.5);
+border-radius: 12px;
+border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.feature-icon {
+font-size: 2rem;
+margin-bottom: 10px;
+display: block;
+}
+
+.feature-title {
+font-weight: 600;
+color: #374151;
+margin-bottom: 5px;
+}
+
+.feature-desc {
+font-size: 0.9rem;
+color: #6b7280;
+}
+
+@media (max-width: 768px) {
+.sso-container {
+padding: 30px 25px;
+margin: 20px;
+}
+
+h1 {
+font-size: 2rem;
+}
+
+.subtitle {
+font-size: 1rem;
+}
+
+.form-container {
+padding: 25px;
+}
+
+.navigation {
+flex-direction: column;
+align-items: center;
+gap: 15px;
+}
+}
+</style>
+</head>
+
+<body>
+    <div class="sso-container">
+        <div class="header">
+            <span class="sso-icon">🔐</span>
+            <h1>SSO Authentication</h1>
+            <p class="subtitle">Single Sign-On with cryptographic token verification</p>
+        </div>
+
+        <div class="security-banner">
+            <h3>🛡️ Advanced Security Protocol</h3>
+            <p>This SSO system uses PASETO tokens with ECDSA signatures for maximum security. Your token contains
+                encrypted authentication data that cannot be forged.</p>
+        </div>
+
+        <div class="form-container">
+            <form method="POST" action="/sso" id="ssoForm">
+                <div class="form-group">
+                    <label for="username">👤 Username or Email</label>
+                    <input type="text" id="username" name="username" required
+                        placeholder="Enter your registered username or email">
+                </div>
+
+                <div class="form-group">
+                    <label for="token">🎫 Authentication Token</label>
+                    <textarea id="token" name="token" rows="4" required
+                        placeholder="Paste your SSO authentication token here..."></textarea>
+                    <div class="token-info">
+                        ⚠️ Paste the complete token received via email or SMS. This token is time-sensitive and
+                        single-use only.
+                    </div>
+                </div>
+
+                <button type="submit" class="btn">
+                    🚀 Authenticate with SSO
+                </button>
+            </form>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <span class="feature-icon">⏱️</span>
+                <div class="feature-title">Time-Limited</div>
+                <div class="feature-desc">Tokens expire automatically</div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">🔒</span>
+                <div class="feature-title">Encrypted</div>
+                <div class="feature-desc">AES-256 encryption</div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">✍️</span>
+                <div class="feature-title">Signed</div>
+                <div class="feature-desc">ECDSA digital signatures</div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">🛡️</span>
+                <div class="feature-title">Tamper-Proof</div>
+                <div class="feature-desc">Cryptographic verification</div>
+            </div>
+        </div>
+
+        <div class="navigation">
+            <a href="/v1/static" class="nav-link">🏠 Home</a>
+            <a href="/login" class="nav-link">🔑 Other Login Methods</a>
+            <a href="/register" class="nav-link">📝 Create Account</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('ssoForm').addEventListener('submit', function (e) {
+            const username = document.getElementById('username').value.trim();
+            const token = document.getElementById('token').value.trim();
+
+            if (!username || !token) {
+                e.preventDefault();
+                alert('Please fill in all required fields');
+                return;
+            }
+
+            if (token.length < 50) {
+                e.preventDefault();
+                alert('The authentication token appears to be incomplete. Please paste the complete token.');
+                return;
+            }
+
+            // Show loading state
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '🔄 Verifying Token...';
+            submitBtn.disabled = true;
+        });
+
+        // Auto-resize textarea
+        document.getElementById('token').addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = Math.max(120, this.scrollHeight) + 'px';
+        });
+
+        // Enhanced visual feedback
+        document.querySelectorAll('input, textarea').forEach(element => {
+            element.addEventListener('focus', function () {
+                this.parentElement.style.transform = 'translateY(-2px)';
+            });
+            element.addEventListener('blur', function () {
+                this.parentElement.style.transform = 'translateY(0)';
+            });
+        });
+
+        // Token validation helper
+        document.getElementById('token').addEventListener('paste', function (e) {
+            setTimeout(() => {
+                const token = this.value.trim();
+                if (token.length > 100) {
+                    this.style.borderColor = '#10b981';
+                    document.querySelector('.token-info').innerHTML = '✅ Token format looks valid!';
+                    document.querySelector('.token-info').style.background = '#d1fae5';
+                    document.querySelector('.token-info').style.borderColor = '#10b981';
+                    document.querySelector('.token-info').style.color = '#065f46';
+                }
+            }, 100);
+        });
+    </script>
+</body>
+
+</html>
