@@ -9,16 +9,14 @@ import (
 )
 
 type Config struct {
-	Addr         string
-	PasetoSecret []byte
-	ProofTimeout time.Duration
-	// Central Authentication System Configuration
-	Environment    string
-	DatabaseURL    string
-	EnableHTTPS    bool
-	TrustedProxies []string
-	LogLevel       string
-	// Production-ready security configurations
+	Addr                  string
+	PasetoSecret          []byte
+	ProofTimeout          time.Duration
+	Environment           string
+	DatabaseURL           string
+	EnableHTTPS           bool
+	TrustedProxies        []string
+	LogLevel              string
 	CORSOrigins           []string
 	SessionTimeout        time.Duration
 	MaxLoginAttempts      int
@@ -28,14 +26,12 @@ type Config struct {
 	EnableAuditLogging    bool
 	JWTRefreshEnabled     bool
 	PasswordPolicy        PasswordPolicyConfig
-
-	// Central Auth System specific
-	ServiceName        string
-	AllowedRedirects   []string
-	TokenIssuer        string
-	EnableSSOCallback  bool
-	SSOCallbackURL     string
-	ClientRegistration ClientRegistrationConfig
+	ServiceName           string
+	AllowedRedirects      []string
+	TokenIssuer           string
+	EnableSSOCallback     bool
+	SSOCallbackURL        string
+	ClientRegistration    ClientRegistrationConfig
 }
 
 type PasswordPolicyConfig struct {
@@ -150,33 +146,6 @@ func loadConfig() *Config {
 		SSOCallbackURL:        ssoCallbackURL,
 		ClientRegistration:    clientRegistration,
 	}
-}
-
-func parseIntWithDefault(envKey string, defaultValue int) int {
-	valueStr := os.Getenv(envKey)
-	if valueStr == "" {
-		return defaultValue
-	}
-	value, err := strconv.Atoi(valueStr)
-	if err != nil {
-		log.Printf("invalid %s value '%s', using default %d", envKey, valueStr, defaultValue)
-		return defaultValue
-	}
-	return value
-}
-
-func parseDurationWithDefault(envKey, defaultValue string) time.Duration {
-	valueStr := os.Getenv(envKey)
-	if valueStr == "" {
-		valueStr = defaultValue
-	}
-	duration, err := time.ParseDuration(valueStr)
-	if err != nil {
-		defaultDuration, _ := time.ParseDuration(defaultValue)
-		log.Printf("invalid %s value '%s', using default %s", envKey, valueStr, defaultValue)
-		return defaultDuration
-	}
-	return duration
 }
 
 func getEnv(k, d string) string {

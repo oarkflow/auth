@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Factor Authentication</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-12 max-w-md">
+        <div class="bg-white rounded-xl shadow-lg p-8">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
+                        </path>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-900 mb-2">Security Verification</h1>
+                <p class="text-gray-600">Enter the verification code from your authenticator app</p>
+                {{if .Username}}<p class="text-sm text-gray-500 mt-2">User: {{.Username}}</p>{{end}}
+            </div>
+            <form id="mfa-form" class="space-y-6" method="POST" action="/mfa/verify">
+                <input type="hidden" name="username" value="{{.Username}}">
+                <div>
+                    <label for="code" class="block text-sm font-medium text-gray-700 mb-2">
+                        Authentication Code
+                    </label>
+                    <input type="text" id="code" name="code" maxlength="8"
+                        class="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-xl tracking-widest font-mono"
+                        placeholder="000000" required autofocus>
+                    <p class="text-xs text-gray-500 mt-2">Enter a 6-digit code from your app or an 8-character backup
+                        code
+                    </p>
+                </div>
+                {{if .Error}}
+                <div id="error-message" class="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div class="flex">
+                        <svg class="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd"
+                                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                clip-rule="evenodd"></path>
+                        </svg>
+                        <p class="ml-2 text-sm text-red-800">{{.Error}}</p>
+                    </div>
+                </div>
+                {{end}}
+                <button type="submit" id="verify-btn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    Verify Code
+                </button>
+            </form>
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-500 mb-2">Having trouble?</p>
+                <a href="#" onclick="showBackupCodeHelp()" class="text-blue-600 hover:text-blue-800 text-sm">Use a
+                    backup code instead</a>
+            </div>
+        </div>
+    </div>
+    <script>
+        function showBackupCodeHelp() {
+            alert('Enter one of your 8-character backup codes (format: XXXX-XXXX) in the code field. Each backup code can only be used once.');
+        }
+    </script>
+</body>
+
+</html>

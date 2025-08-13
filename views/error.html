@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Central Authentication System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-gradient-to-br from-red-50 via-white to-orange-50 min-h-screen">
+    <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full space-y-8">
+            <!-- Error Icon -->
+            <div class="text-center">
+                <div class="mx-auto h-20 w-20 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z">
+                        </path>
+                    </svg>
+                </div>
+                <h1 class="text-4xl font-bold text-gray-900 mb-2">{{.StatusCode}}</h1>
+                <h2 class="text-2xl font-semibold text-red-600 mb-4">{{.Title}}</h2>
+            </div>
+
+            <!-- Error Details -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                <div class="text-center space-y-4">
+                    <p class="text-lg text-gray-700">{{.Message}}</p>
+                    <p class="text-gray-600">{{.Description}}</p>
+
+                    {{if .Technical}}
+                    <div class="mt-6 p-4 bg-gray-50 rounded-lg text-left">
+                        <h3 class="text-sm font-medium text-gray-900 mb-2">Technical Details</h3>
+                        <p class="text-sm text-gray-600 font-mono break-all">{{.Technical}}</p>
+                    </div>
+                    {{end}}
+
+                    {{if .ErrorID}}
+                    <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                        <h3 class="text-sm font-medium text-blue-900 mb-2">Error ID</h3>
+                        <p class="text-sm text-blue-700 font-mono">{{.ErrorID}}</p>
+                        <p class="text-xs text-blue-600 mt-1">Include this ID when contacting support</p>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="space-y-4">
+                {{if .RetryURL}}
+                <a href="{{.RetryURL}}"
+                    class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
+                    Try Again
+                </a>
+                {{end}}
+
+                <div class="flex space-x-3">
+                    <a href="/"
+                        class="flex-1 flex justify-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
+                        Go Home
+                    </a>
+                    <button onclick="history.back()"
+                        class="flex-1 flex justify-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
+                        Go Back
+                    </button>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                <h3 class="text-sm font-medium text-gray-900 mb-3">Need Help?</h3>
+                <div class="space-y-2 text-sm text-gray-600">
+                    <p>If this error persists, please contact our support team with the error ID above.</p>
+                    <div class="flex items-center space-x-4 mt-3">
+                        <a href="/health" class="text-primary-600 hover:text-primary-500 font-medium">System Status</a>
+                        <a href="mailto:support@example.com"
+                            class="text-primary-600 hover:text-primary-500 font-medium">Contact Support</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
