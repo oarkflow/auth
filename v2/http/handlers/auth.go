@@ -16,7 +16,7 @@ import (
 	"github.com/oarkflow/xid/wuid"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/oarkflow/auth/v2"
+	v2 "github.com/oarkflow/auth/v2"
 	"github.com/oarkflow/auth/v2/http/requests"
 	"github.com/oarkflow/auth/v2/models"
 	"github.com/oarkflow/auth/v2/objects"
@@ -236,8 +236,44 @@ func MFAVerifyPage(c *fiber.Ctx) error {
 }
 
 func MFABackupCodesPage(c *fiber.Ctx) error {
+	pubHex, _ := c.Locals("user").(string)
+	userInfo, exists := objects.Manager.LookupUserByPubHex(pubHex)
+	if !exists {
+		return renderErrorPage(c, http.StatusNotFound, "User Not Found",
+			"User information could not be retrieved.",
+			"Please log in again.", "User not found during MFA setup", "/login")
+	}
+	if !userInfo.MFAEnabled {
+		return renderErrorPage(c, http.StatusBadRequest, "MFA Not Enabled",
+			"Multi-Factor Authentication is not enabled for your account.",
+			"You need to enable MFA first.", "", "/protected")
+	}
+	// Generate new backup codes
+	backupCodes, err := v2.GenerateBackupCodes(10)
+	if err != nil {
+		return renderErrorPage(c, http.StatusInternalServerError, "Backup Codes Error",
+			"Failed to generate new backup codes.",
+			"Please try again later.", fmt.Sprintf("Backup codes error: %v", err), "/protected")
+	}
+
+	// Get current MFA secret
+	secret, _, err := objects.Manager.Vault.GetUserMFA(userInfo.UserID)
+	if err != nil {
+		return renderErrorPage(c, http.StatusInternalServerError, "MFA Settings Error",
+			"Failed to retrieve MFA settings.",
+			"Please try again later.", fmt.Sprintf("MFA get error: %v", err), "/protected")
+	}
+
+	// Update with new backup codes
+	err = objects.Manager.Vault.SetUserMFA(userInfo.UserID, secret, backupCodes)
+	if err != nil {
+		return renderErrorPage(c, http.StatusInternalServerError, "Database Error",
+			"Failed to save new backup codes.",
+			"Please try again later.", fmt.Sprintf("Backup codes save error: %v", err), "/protected")
+	}
 	return c.Render("mfa-backup-codes", fiber.Map{
-		"Title": "MFA Backup Codes",
+		"Title":       "MFA Backup Codes",
+		"BackupCodes": backupCodes,
 	})
 }
 

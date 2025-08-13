@@ -27,10 +27,8 @@ func Setup(prefix string, router fiber.Router) {
 	protectedRoute.Get("/logout", LogoutPage)
 	protectedRoute.Post("/logout", PostLogout)
 	protectedRoute.Get("/api/userinfo", UserInfoPage)
-
-	mfaRoute := protectedRoute.Group("/mfa")
-	mfaRoute.Get("/setup", MFASetupPage)
-	mfaRoute.Post("/setup", PostMFASetup)
-	mfaRoute.Post("/disable", PostMFADisable)
-	mfaRoute.Get("/backup-codes", MFABackupCodesPage)
+	protectedRoute.Get("/mfa/setup", MFASetupPage)
+	protectedRoute.Post("/mfa/setup", PostMFASetup)
+	protectedRoute.Post("/mfa/disable", PostMFADisable)
+	protectedRoute.Get("/mfa/backup-codes", MFABackupCodesPage)
 }
