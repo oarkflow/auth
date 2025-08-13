@@ -137,13 +137,14 @@ type Manager struct {
 	Vault     storage.VaultStorage
 	Config    *config.Config
 	// Authentication state
-	UserRegistry     map[string]ecdsa.PublicKey
-	UserRegistryMu   sync.RWMutex
-	NonceCache       map[string]int64
-	NonceCacheMu     sync.Mutex
-	LogoutDenylist   map[string]int64
-	LogoutDenylistMu sync.Mutex
-	Curve            elliptic.Curve
+	UserRegistry      map[string]ecdsa.PublicKey
+	UserRegistryMu    sync.RWMutex
+	NonceCache        map[string]int64
+	NonceCacheMu      sync.Mutex
+	LogoutDenylist    map[string]int64
+	LogoutDenylistMu  sync.Mutex
+	Curve             elliptic.Curve
+	UserLogoutTracker *UserLogoutTracker
 
 	// Verification storage
 	VerificationTokens map[string]string // username -> token
@@ -166,10 +167,10 @@ func NewManager() *Manager {
 	}
 	templates := template.Must(template.ParseGlob("static/*.html"))
 	return &Manager{
-		Templates: templates,
-		Vault:     vault,
-		Config:    cfg,
-
+		Templates:         templates,
+		Vault:             vault,
+		Config:            cfg,
+		UserLogoutTracker: NewUserLogoutTracker(),
 		// Initialize authentication state
 		UserRegistry:   make(map[string]ecdsa.PublicKey),
 		NonceCache:     make(map[string]int64),

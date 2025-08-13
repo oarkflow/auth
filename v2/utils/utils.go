@@ -37,28 +37,28 @@ func IsPhone(username string) bool {
 
 // Send verification email (demo: just print link)
 func SendVerificationEmail(email, token string) error {
-	link := fmt.Sprintf("http://localhost:8080/verify?username=%s&token=%s", email, token)
+	link := fmt.Sprintf("http://localhost:3000/verify?username=%s&token=%s", email, token)
 	log.Printf("Verification EMAIL link for %s: %s", email, link)
 	return nil
 }
 
 // Send verification SMS (demo: just print link)
 func SendVerificationSMS(phone, token string) error {
-	link := fmt.Sprintf("http://localhost:8080/verify?username=%s&token=%s", phone, token)
+	link := fmt.Sprintf("http://localhost:3000/verify?username=%s&token=%s", phone, token)
 	log.Printf("Verification SMS link for %s: %s", phone, link)
 	return nil
 }
 
 // Send password reset email (demo: just print link)
 func SendPasswordResetEmail(email, token string) error {
-	link := fmt.Sprintf("http://localhost:8080/reset-password?token=%s", token)
+	link := fmt.Sprintf("http://localhost:3000/reset-password?token=%s", token)
 	log.Printf("Password RESET link for %s: %s", email, link)
 	return nil
 }
 
 // Send password reset SMS (demo: just print link)
 func SendPasswordResetSMS(phone, token string) error {
-	link := fmt.Sprintf("http://localhost:8080/reset-password?token=%s", token)
+	link := fmt.Sprintf("http://localhost:3000/reset-password?token=%s", token)
 	log.Printf("Password RESET SMS for %s: %s", phone, link)
 	return nil
 }
@@ -146,7 +146,7 @@ func DecryptPrivateKeyD(encPrivD, password string) string {
 	return hex.EncodeToString(plain)
 }
 
-func GetCookie(enableHTTPS bool, env, token string, maxAges ...int) *fiber.Cookie {
+func GetCookie(enableHTTPS bool, env, key, val string, maxAges ...int) *fiber.Cookie {
 	maxAge := 300
 	if len(maxAges) > 0 {
 		maxAge = maxAges[0]
@@ -156,8 +156,8 @@ func GetCookie(enableHTTPS bool, env, token string, maxAges ...int) *fiber.Cooki
 	secure := enableHTTPS || env == "production"
 
 	return &fiber.Cookie{
-		Name:     "session_token",
-		Value:    token,
+		Name:     key,
+		Value:    val,
 		Path:     "/",
 		HTTPOnly: true,
 		Secure:   secure,

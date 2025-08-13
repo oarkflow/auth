@@ -11,7 +11,7 @@ import (
 	"math/big"
 	"strings"
 	"time"
-	
+
 	"github.com/oarkflow/auth/v2/models"
 )
 
@@ -129,7 +129,7 @@ func VerifyProof(p *models.SchnorrProof) error {
 	return nil
 }
 
-func generateKeyPair() (string, string, string) {
+func GenerateKeyPair() (string, string, string) {
 	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	pubKeyX := hex.EncodeToString(priv.PublicKey.X.Bytes())
 	pubKeyY := hex.EncodeToString(priv.PublicKey.Y.Bytes())
@@ -138,7 +138,7 @@ func generateKeyPair() (string, string, string) {
 }
 
 // --- Helper Functions ---
-func padHex(s string) string {
+func PadHex(s string) string {
 	return fmt.Sprintf("%064s", strings.ToLower(s))
 }
 

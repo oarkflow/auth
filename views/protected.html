@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protected Area - Central Authentication System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-gradient-to-br from-emerald-50 via-white to-teal-50 min-h-screen">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="h-10 w-10 bg-primary-500 rounded-lg flex items-center justify-center">
+                                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
+                                    </path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <h1 class="text-xl font-semibold text-gray-900">Protected Area</h1>
+                            <p class="text-sm text-gray-500">Central Authentication System</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <div class="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                                <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd"
+                                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                        clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <span class="text-sm font-medium text-green-700">Authenticated</span>
+                        </div>
+                        <form action="/logout" method="POST">
+                            <button type="submit"
+                                class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
+                                Sign Out
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8" data-requires-proof="{{.RequiresProof}}"
+            data-stateless="{{.Stateless}}">
+            <!-- Welcome Section -->
+            <div class="text-center mb-12">
+                <div class="mx-auto h-20 w-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-4xl font-bold text-gray-900 mb-4">Welcome to the Protected Area!</h2>
+                {{if .RequiresProof}}
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 max-w-2xl mx-auto mb-6">
+                    <h3 class="text-lg font-semibold text-blue-900 mb-2">Stateless Authentication Required</h3>
+                    <p class="text-blue-800 mb-4">
+                        This is a proof-based protected area. To access your user data, you need to provide
+                        a cryptographic proof with each request.
+                    </p>
+                    <div class="bg-white border border-blue-200 rounded p-4 text-left">
+                        <h4 class="font-medium text-blue-900 mb-2">API Usage:</h4>
+                        <code class="text-sm text-blue-700 block bg-blue-50 p-2 rounded">
+                            POST /secured-area<br>
+                            Content-Type: application/json<br><br>
+                            {"proof": {"R": "...", "S": "...", "PubKeyX": "...", "PubKeyY": "...", "Nonce": "...", "Ts": ...}}
+                        </code>
+                    </div>
+                </div>
+                {{else}}
+                <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+                    You have successfully authenticated with the Central Authentication System.
+                    This area is only accessible to verified users.
+                </p>
+                {{end}}
+            </div>
+
+            <!-- User Info Card -->
+            <div class="max-w-2xl mx-auto mb-12">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-6">Your Session Information</h3>
+                    <div id="userInfo" class="space-y-4">
+                        <div class="flex items-center justify-center">
+                            <svg class="animate-spin h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
+                            </svg>
+                            <span class="ml-2 text-gray-600">Loading user information...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MFA Settings Card -->
+            <div class="max-w-2xl mx-auto mb-12">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900">Multi-Factor Authentication</h3>
+                        <div id="mfa-status-badge" class="hidden px-3 py-1 rounded-full text-xs font-semibold">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </div>
+                    <div id="mfaSettings" class="space-y-4">
+                        <div class="flex items-center justify-center">
+                            <svg class="animate-spin h-5 w-5 text-primary-600" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
+                            </svg>
+                            <span class="ml-2 text-gray-600">Loading MFA settings...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+                <!-- Secure Access -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+                    <div class="mx-auto h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z">
+                            </path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Secure Access</h3>
+                    <p class="text-gray-600">Your session is protected with enterprise-grade security</p>
+                </div>
+
+                <!-- API Access -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+                    <div class="mx-auto h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z">
+                            </path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">API Access</h3>
+                    <p class="text-gray-600">Access protected APIs with your authenticated session</p>
+                </div>
+
+                <!-- Single Sign-On -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 text-center">
+                    <div class="mx-auto h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Single Sign-On</h3>
+                    <p class="text-gray-600">Use your session across multiple applications</p>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="text-center space-x-4">
+                <a href="/api/userinfo"
+                    class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
+                    View API Response
+                </a>
+                <a href="/"
+                    class="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
+                    Back to Home
+                </a>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-gray-50 border-t border-gray-200">
+            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                <div class="text-center text-sm text-gray-500">
+                    <p>&copy; 2024 Central Authentication System. All rights reserved.</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Read authentication type from data attributes
+        const main = document.querySelector('main');
+        const requiresProof = main.dataset.requiresProof === 'true';
+        const isStateless = main.dataset.stateless === 'true';
+
+        const userInfoDiv = document.getElementById('userInfo');
+
+        // Load user information
+        function loadUserInfo() {
+            if (requiresProof) {
+                // Show proof requirement message
+                userInfoDiv.innerHTML = `
+                    <div class="text-center">
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <div class="flex items-center justify-center mb-2">
+                                <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                                </svg>
+                            </div>
+                            <h4 class="text-lg font-medium text-yellow-800 mb-2">Cryptographic Proof Required</h4>
+                            <p class="text-yellow-700 mb-4">
+                                This is a stateless protected area. Make a POST request with your cryptographic proof to access user data.
+                            </p>
+                            <div class="space-y-2 text-sm">
+                                <p><strong>Endpoint:</strong> <code>/api/proof/userinfo</code></p>
+                                <p><strong>Method:</strong> POST</p>
+                                <p><strong>Get Nonce:</strong> <code>GET /nonce</code></p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Fetch session-based user information
+                fetch('/api/userinfo', {
+                    credentials: 'include'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            userInfoDiv.innerHTML = `
+                            <div class="text-red-600">
+                                <p>Error loading user information: ${data.error}</p>
+                            </div>
+                        `;
+                        } else {
+                            userInfoDiv.innerHTML = `
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center py-2 border-b border-gray-200">
+                                    <span class="font-medium text-gray-700">User ID:</span>
+                                    <span class="text-gray-900 font-mono text-sm">${data.user?.id || 'N/A'}</span>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-b border-gray-200">
+                                    <span class="font-medium text-gray-700">Username:</span>
+                                    <span class="text-gray-900">${data.user?.username || 'N/A'}</span>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-b border-gray-200">
+                                    <span class="font-medium text-gray-700">Login Type:</span>
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${data.user?.login_type === 'secured' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
+                                        ${data.user?.login_type || 'simple'} (Session-Based)
+                                    </span>
+                                </div>
+                                <div class="flex justify-between items-center py-2">
+                                    <span class="font-medium text-gray-700">Session Status:</span>
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        ${data.authenticated ? 'Active' : 'Inactive'}
+                                    </span>
+                                </div>
+                                ${data.session ? `
+                                <div class="flex justify-between items-center py-2 border-t border-gray-200 pt-3">
+                                    <span class="font-medium text-gray-700">Session Expires:</span>
+                                    <span class="text-gray-900 text-sm">${new Date(data.session.expiresAt * 1000).toLocaleString()}</span>
+                                </div>
+                                ` : ''}
+                            </div>
+                        `;
+                        }
+                    })
+                    .catch(error => {
+                        userInfoDiv.innerHTML = `
+                        <div class="text-red-600">
+                            <p>Failed to load user information. Please refresh the page.</p>
+                        </div>
+                    `;
+                    });
+            }
+        }
+
+        // Load MFA settings
+        function loadMFASettings() {
+            const mfaSettingsDiv = document.getElementById('mfaSettings');
+            const mfaStatusBadge = document.getElementById('mfa-status-badge');
+
+            fetch('/api/userinfo', {
+                credentials: 'include'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        mfaSettingsDiv.innerHTML = `
+                            <div class="text-red-600">
+                                <p>Error loading MFA settings: ${data.error}</p>
+                            </div>
+                        `;
+                    } else {
+                        const mfaEnabled = data.user?.mfa_enabled || false;
+
+                        // Update status badge
+                        mfaStatusBadge.classList.remove('hidden');
+                        if (mfaEnabled) {
+                            mfaStatusBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800';
+                            mfaStatusBadge.textContent = 'Enabled';
+                        } else {
+                            mfaStatusBadge.className = 'px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800';
+                            mfaStatusBadge.textContent = 'Disabled';
+                        }
+
+                        // Update settings content
+                        if (mfaEnabled) {
+                            mfaSettingsDiv.innerHTML = `
+                                <div class="space-y-4">
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0">
+                                            <svg class="w-5 h-5 text-green-500 mt-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                            </svg>
+                                        </div>
+                                        <div class="ml-3">
+                                            <p class="text-sm font-medium text-gray-900">
+                                                Multi-Factor Authentication is enabled
+                                            </p>
+                                            <p class="text-sm text-gray-500">
+                                                Your account is protected with an additional security layer
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <a href="/mfa/backup-codes"
+                                           class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                            </svg>
+                                            Manage Backup Codes
+                                        </a>
+                                        <form method="POST" action="/mfa/disable" class="inline">
+                                            <button type="button" onclick="disableMFA()"
+                                                    class="inline-flex items-center px-4 py-2 border border-red-300 shadow-sm text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                                </svg>
+                                                Disable MFA
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            mfaSettingsDiv.innerHTML = `
+                                <div class="space-y-4">
+                                    <div class="flex items-start">
+                                        <div class="flex-shrink-0">
+                                            <svg class="w-5 h-5 text-yellow-500 mt-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                            </svg>
+                                        </div>
+                                        <div class="ml-3">
+                                            <p class="text-sm font-medium text-gray-900">
+                                                Multi-Factor Authentication is disabled
+                                            </p>
+                                            <p class="text-sm text-gray-500">
+                                                Enhance your account security by enabling MFA
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <a href="/mfa/setup"
+                                           class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                            </svg>
+                                            Enable MFA
+                                        </a>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+                })
+                .catch(error => {
+                    mfaSettingsDiv.innerHTML = `
+                        <div class="text-red-600">
+                            <p>Failed to load MFA settings. Please refresh the page.</p>
+                        </div>
+                    `;
+                });
+        }
+
+        function disableMFA() {
+            const password = prompt('Please enter your current password to disable MFA:');
+            if (password) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/mfa/disable';
+
+                const passwordInput = document.createElement('input');
+                passwordInput.type = 'hidden';
+                passwordInput.name = 'password';
+                passwordInput.value = password;
+
+                form.appendChild(passwordInput);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
+        // Load both user info and MFA settings
+        loadUserInfo();
+        loadMFASettings();
+    </script>
+</body>
+
+</html>
