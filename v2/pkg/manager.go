@@ -3,8 +3,6 @@ package pkg
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"html/template"
-	"log"
 	"math/big"
 	"sync"
 	"time"
@@ -133,9 +131,8 @@ func (s *SecurityManager) ClearLoginAttempts(identifier string) {
 }
 
 type Manager struct {
-	Templates *template.Template
-	Vault     storage.VaultStorage
-	Config    *config.Config
+	Vault  storage.Storage
+	Config *config.Config
 	// Authentication state
 	UserRegistry      map[string]ecdsa.PublicKey
 	UserRegistryMu    sync.RWMutex
@@ -159,33 +156,23 @@ type Manager struct {
 	Security *SecurityManager
 }
 
-func NewManager() *Manager {
-	cfg := config.LoadConfig()
-	vault, err := storage.NewDatabaseVaultStorage(cfg.DatabaseURL)
-	if err != nil {
-		log.Fatalf("Failed to initialize DatabaseVaultStorage: %v", err)
+func NewManager(vaultStorage storage.Storage, configs ...*config.Config) *Manager {
+	var cfg *config.Config
+	if len(configs) > 0 {
+		cfg = configs[0]
 	}
-	templates := template.Must(template.ParseGlob("static/*.html"))
 	return &Manager{
-		Templates:         templates,
-		Vault:             vault,
-		Config:            cfg,
-		UserLogoutTracker: NewUserLogoutTracker(),
-		// Initialize authentication state
-		UserRegistry:   make(map[string]ecdsa.PublicKey),
-		NonceCache:     make(map[string]int64),
-		LogoutDenylist: make(map[string]int64),
-		Curve:          elliptic.P256(),
-
-		// Initialize verification storage
-		VerificationTokens: make(map[string]string),
-		VerificationStatus: make(map[string]bool),
-
-		// Initialize password reset storage
+		Vault:               vaultStorage,
+		Config:              cfg,
+		UserLogoutTracker:   NewUserLogoutTracker(),
+		UserRegistry:        make(map[string]ecdsa.PublicKey),
+		NonceCache:          make(map[string]int64),
+		LogoutDenylist:      make(map[string]int64),
+		Curve:               elliptic.P256(),
+		VerificationTokens:  make(map[string]string),
+		VerificationStatus:  make(map[string]bool),
 		PasswordResetTokens: make(map[string]models.PasswordResetData),
-
-		// Initialize security manager
-		Security: NewSecurityManager(),
+		Security:            NewSecurityManager(),
 	}
 }
 

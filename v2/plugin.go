@@ -1,12 +1,16 @@
 package v2
 
 import (
+	"log"
+
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/oarkflow/auth/v2/config"
 	"github.com/oarkflow/auth/v2/http/middlewares"
 	"github.com/oarkflow/auth/v2/http/routes"
 	"github.com/oarkflow/auth/v2/objects"
 	"github.com/oarkflow/auth/v2/pkg"
+	"github.com/oarkflow/auth/v2/storage"
 )
 
 type Plugin struct {
@@ -16,7 +20,12 @@ type Plugin struct {
 }
 
 func (p *Plugin) Register() {
-	objects.Manager = pkg.NewManager()
+	cfg := config.LoadConfig()
+	vault, err := storage.NewDatabaseVaultStorage(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("Failed to initialize DatabaseVaultStorage: %v", err)
+	}
+	objects.Manager = pkg.NewManager(vault, cfg)
 	routes.Setup(p.Prefix, p.App)
 	routes.ProtectedRoutes(p.App.Group(p.Prefix, middlewares.Verify))
 }
