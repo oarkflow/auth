@@ -16,10 +16,10 @@ import (
 	"github.com/oarkflow/xid/wuid"
 	"golang.org/x/crypto/bcrypt"
 
-	v2 "github.com/oarkflow/auth/v2"
 	"github.com/oarkflow/auth/v2/http/requests"
 	"github.com/oarkflow/auth/v2/models"
 	"github.com/oarkflow/auth/v2/objects"
+	"github.com/oarkflow/auth/v2/pkg"
 	"github.com/oarkflow/auth/v2/utils"
 )
 
@@ -132,8 +132,8 @@ func VerifyPage(c *fiber.Ctx) error {
 	objects.Manager.Vault.SetUserSecret(username+"_logintype", "") // Remove temp
 
 	// Generate key pair after verification
-	pubx, puby, privd := v2.GenerateKeyPair()
-	pubHex := v2.PadHex(pubx) + ":" + v2.PadHex(puby)
+	pubx, puby, privd := pkg.GenerateKeyPair()
+	pubHex := pkg.PadHex(pubx) + ":" + pkg.PadHex(puby)
 	info := models.UserInfo{
 		UserID:    wuid.New().String(),
 		Username:  username,
@@ -141,7 +141,7 @@ func VerifyPage(c *fiber.Ctx) error {
 	}
 	objects.Manager.Vault.SetUserInfo(pubHex, info)
 	// Store public key in credentials table
-	objects.Manager.Vault.SetUserPublicKey(info.UserID, v2.PadHex(pubx), v2.PadHex(puby))
+	objects.Manager.Vault.SetUserPublicKey(info.UserID, pkg.PadHex(pubx), pkg.PadHex(puby))
 	objects.Manager.RegisterUserKey(pubHex, []byte(pubx), []byte(puby))
 	// Retrieve password hash and move to DBUserID key
 	passwordHash, err := objects.Manager.Vault.GetUserSecret(username)
@@ -159,12 +159,12 @@ func VerifyPage(c *fiber.Ctx) error {
 			"Password not found for key encryption during verification", "/register")
 	}
 	if loginType == "simple" {
-		return c.Redirect(LoginURI, http.StatusSeeOther)
+		return c.Redirect(utils.LoginURI, http.StatusSeeOther)
 	}
 	encPrivD := utils.EncryptPrivateKeyD(privd, password)
 	keyData := map[string]string{
-		"PubKeyX":              v2.PadHex(pubx),
-		"PubKeyY":              v2.PadHex(puby),
+		"PubKeyX":              pkg.PadHex(pubx),
+		"PubKeyY":              pkg.PadHex(puby),
 		"EncryptedPrivateKeyD": encPrivD,
 	}
 	jsonData, _ := json.Marshal(keyData)
@@ -208,7 +208,7 @@ func MFASetupPage(c *fiber.Ctx) error {
 	}
 
 	// Generate new MFA secret and QR code
-	secret, qrCode, err := v2.GenerateMFASecret(userInfo.Username, "Auth System")
+	secret, qrCode, err := pkg.GenerateMFASecret(userInfo.Username, "Auth System")
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "MFA Setup Error",
 			"Failed to generate MFA credentials.",
@@ -216,7 +216,7 @@ func MFASetupPage(c *fiber.Ctx) error {
 	}
 
 	// Generate backup codes
-	backupCodes, err := v2.GenerateBackupCodes(10)
+	backupCodes, err := pkg.GenerateBackupCodes(10)
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Backup Codes Error",
 			"Failed to generate backup codes.",
@@ -255,7 +255,7 @@ func MFABackupCodesPage(c *fiber.Ctx) error {
 			"You need to enable MFA first.", "", "/protected")
 	}
 	// Generate new backup codes
-	backupCodes, err := v2.GenerateBackupCodes(10)
+	backupCodes, err := pkg.GenerateBackupCodes(10)
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Backup Codes Error",
 			"Failed to generate new backup codes.",
@@ -317,7 +317,7 @@ func PostMFASetup(c *fiber.Ctx) error {
 	}
 
 	// Verify the code
-	if !v2.VerifyMFACode(req.Code, tempSecret) {
+	if !pkg.VerifyMFACode(req.Code, tempSecret) {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Verification Code",
 			"The verification code is incorrect.",
 			"Please check your authenticator app and try again.", "", "/mfa/setup")
@@ -388,9 +388,9 @@ func PostMFAVerify(c *fiber.Ctx) error {
 	}
 	isValid := false
 	if len(code) == 6 {
-		isValid = v2.VerifyMFACode(code, secret)
-	} else if v2.IsBackupCodeFormat(code) {
-		formattedCode := v2.FormatBackupCode(code)
+		isValid = pkg.VerifyMFACode(code, secret)
+	} else if pkg.IsBackupCodeFormat(code) {
+		formattedCode := pkg.FormatBackupCode(code)
 		for _, backupCode := range backupCodes {
 			if backupCode == formattedCode {
 				isValid = true
@@ -696,7 +696,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		objects.Manager.UserLogoutTracker.ClearUserLogout(userInfo.UserID)
 	}
 	c.Cookie(utils.GetCookie(objects.Manager.Config.EnableHTTPS, objects.Manager.Config.Environment, "session_token", tokenStr))
-	return c.Redirect(AppURI, fiber.StatusSeeOther)
+	return c.Redirect(utils.AppURI, fiber.StatusSeeOther)
 }
 
 func PostSecureLogin(c *fiber.Ctx) error {
@@ -827,8 +827,8 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	}
 
 	nonce, ts := utils.GetNonceWithTimestamp()
-	proof := v2.GenerateProof(privD, nonce, ts)
-	if err := v2.VerifyProofWithReplay(objects.Manager, &proof); err != nil {
+	proof := pkg.GenerateProof(privD, nonce, ts)
+	if err := pkg.VerifyProofWithReplay(objects.Manager, &proof); err != nil {
 		// Phase 1: Record failed login attempt
 		objects.Manager.Security.RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Cryptographic Proof Failed",
@@ -850,7 +850,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 			fmt.Sprintf("PASETO token encryption failed: %v", err), "/login")
 	}
 	c.Cookie(utils.GetCookie(objects.Manager.Config.EnableHTTPS, objects.Manager.Config.Environment, "session_token", tokenStr))
-	return c.Redirect(AppURI, fiber.StatusSeeOther)
+	return c.Redirect(utils.AppURI, fiber.StatusSeeOther)
 }
 
 func PostLogout(c *fiber.Ctx) error {
@@ -900,7 +900,7 @@ func PostLogout(c *fiber.Ctx) error {
 	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	c.Set("Pragma", "no-cache")
 	c.Set("Expires", "0")
-	return c.Redirect(LogoutURI+"?success=1", http.StatusSeeOther)
+	return c.Redirect(utils.LogoutURI+"?success=1", http.StatusSeeOther)
 }
 
 func renderErrorPage(c *fiber.Ctx, statusCode int, title, message, description, technical, retryURL string) error {

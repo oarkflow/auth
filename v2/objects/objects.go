@@ -1,7 +1,7 @@
 package objects
 
 import (
-	"github.com/oarkflow/auth/v2"
+	"github.com/oarkflow/auth/v2/pkg"
 )
 
-var Manager *v2.Manager
+var Manager *pkg.Manager
