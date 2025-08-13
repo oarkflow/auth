@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Phase 1: Rate Limiting and Security Structures
+// Phase 1: Rate Limiting and Security
 type RateLimiter struct {
 	requests map[string][]time.Time
 	attempts map[string][]time.Time
@@ -53,9 +53,12 @@ type RefreshToken struct {
 
 // --- Types ---
 type UserInfo struct {
-	UserID    string `db:"user_id"`
-	Username  string `db:"username"`
-	LoginType string `db:"login_type"`
+	UserID         string   `db:"user_id"`
+	Username       string   `db:"username"`
+	LoginType      string   `db:"login_type"`
+	MFAEnabled     bool     `db:"mfa_enabled"`
+	MFASecret      string   `db:"mfa_secret"`
+	MFABackupCodes []string `db:"mfa_backup_codes"`
 }
 
 type schnorrProof struct {
@@ -82,4 +85,23 @@ type PasswordResetData struct {
 	Token     string
 	ExpiresAt time.Time
 	Used      bool
+}
+
+// MFA-related types
+type MFASetupData struct {
+	Secret      string   `json:"secret"`
+	QRCode      string   `json:"qr_code"`
+	BackupCodes []string `json:"backup_codes"`
+}
+
+type MFAVerificationRequest struct {
+	Username string `json:"username"`
+	Code     string `json:"code"`
+}
+
+type LoginStepResponse struct {
+	Step       string `json:"step"`
+	Message    string `json:"message"`
+	RequireMFA bool   `json:"require_mfa,omitempty"`
+	UserID     string `json:"user_id,omitempty"`
 }

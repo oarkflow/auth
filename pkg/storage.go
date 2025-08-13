@@ -19,6 +19,15 @@ type VaultStorage interface {
 	SetUserPublicKey(userID string, pubKeyX, pubKeyY string) error
 	GetUserPublicKey(userID string) (map[string]string, error)
 
+	// MFA methods
+	SetUserMFA(userID string, secret string, backupCodes []string) error
+	GetUserMFA(userID string) (string, []string, error)
+	EnableMFA(userID string) error
+	DisableMFA(userID string) error
+	IsUserMFAEnabled(userID string) (bool, error)
+	ValidateBackupCode(userID, code string) error
+	InvalidateBackupCode(userID, code string) error
+
 	// Central Authentication System methods
 	CreateClient(client *Client) error
 	GetClient(clientID string) (*Client, error)
@@ -56,6 +65,7 @@ func NewSQLiteVaultStorage(dbPath string) (*SQLiteVaultStorage, error) {
 		username TEXT UNIQUE NOT NULL,
 		user_id TEXT NOT NULL,
 		login_type TEXT DEFAULT 'simple' CHECK (login_type IN ('simple', 'secured')),
+		mfa_enabled BOOLEAN DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		is_active BOOLEAN DEFAULT 1,
@@ -160,14 +170,15 @@ func NewSQLiteVaultStorage(dbPath string) (*SQLiteVaultStorage, error) {
 }
 
 func (v *SQLiteVaultStorage) SetUserInfo(pubHex string, info UserInfo) error {
-	_, err := v.db.Exec(`INSERT OR REPLACE INTO users (pub_hex, username, user_id, login_type) VALUES (?, ?, ?, ?)`,
-		pubHex, info.Username, info.UserID, info.LoginType)
+	_, err := v.db.Exec(`INSERT OR REPLACE INTO users (pub_hex, username, user_id, login_type, mfa_enabled) VALUES (?, ?, ?, ?, ?)`,
+		pubHex, info.Username, info.UserID, info.LoginType, info.MFAEnabled)
 	return err
 }
 
 func (v *SQLiteVaultStorage) GetUserInfo(pubHex string) (UserInfo, error) {
 	var info UserInfo
-	err := v.db.Get(&info, `SELECT user_id, username, login_type FROM users WHERE pub_hex = ?`, pubHex)
+	err := v.db.QueryRow(`SELECT user_id, username, login_type, mfa_enabled FROM users WHERE pub_hex = ?`, pubHex).Scan(
+		&info.UserID, &info.Username, &info.LoginType, &info.MFAEnabled)
 	if err != nil {
 		return UserInfo{}, err
 	}
@@ -176,7 +187,8 @@ func (v *SQLiteVaultStorage) GetUserInfo(pubHex string) (UserInfo, error) {
 
 func (v *SQLiteVaultStorage) GetUserInfoByUsername(username string) (UserInfo, error) {
 	var info UserInfo
-	err := v.db.Get(&info, `SELECT user_id, username, login_type FROM users WHERE username = ?`, username)
+	err := v.db.QueryRow(`SELECT user_id, username, login_type, mfa_enabled FROM users WHERE username = ?`, username).Scan(
+		&info.UserID, &info.Username, &info.LoginType, &info.MFAEnabled)
 	if err != nil {
 		return UserInfo{}, err
 	}
@@ -358,4 +370,72 @@ func (v *SQLiteVaultStorage) GetRefreshToken(token string) (*RefreshToken, error
 func (v *SQLiteVaultStorage) RevokeRefreshToken(token string) error {
 	_, err := v.db.Exec(`DELETE FROM refresh_tokens WHERE token = ?`, token)
 	return err
+}
+
+// MFA methods implementation
+func (v *SQLiteVaultStorage) SetUserMFA(userID string, secret string, backupCodes []string) error {
+	backupCodesJSON, _ := json.Marshal(backupCodes)
+	_, err := v.db.Exec(`INSERT OR REPLACE INTO credentials (user_id, secret, secret_type, metadata) VALUES (?, ?, 'mfa', ?)`, userID, secret, string(backupCodesJSON))
+	return err
+}
+
+func (v *SQLiteVaultStorage) GetUserMFA(userID string) (string, []string, error) {
+	var secret, metadata string
+	err := v.db.QueryRow(`SELECT secret, metadata FROM credentials WHERE user_id = ? AND secret_type = 'mfa'`, userID).Scan(&secret, &metadata)
+	if err != nil {
+		return "", nil, err
+	}
+	var backupCodes []string
+	if metadata != "" {
+		json.Unmarshal([]byte(metadata), &backupCodes)
+	}
+	return secret, backupCodes, nil
+}
+
+func (v *SQLiteVaultStorage) EnableMFA(userID string) error {
+	_, err := v.db.Exec(`UPDATE users SET mfa_enabled = 1 WHERE user_id = ?`, userID)
+	return err
+}
+
+func (v *SQLiteVaultStorage) DisableMFA(userID string) error {
+	_, err := v.db.Exec(`UPDATE users SET mfa_enabled = 0 WHERE user_id = ?`, userID)
+	return err
+}
+
+func (v *SQLiteVaultStorage) IsUserMFAEnabled(userID string) (bool, error) {
+	var mfaEnabled bool
+	err := v.db.QueryRow(`SELECT mfa_enabled FROM users WHERE user_id = ?`, userID).Scan(&mfaEnabled)
+	if err != nil {
+		return false, err
+	}
+	return mfaEnabled, nil
+}
+
+func (v *SQLiteVaultStorage) ValidateBackupCode(userID, code string) error {
+	secret, backupCodes, err := v.GetUserMFA(userID)
+	if err != nil {
+		return err
+	}
+
+	// Check if code exists in backup codes
+	found := false
+	newBackupCodes := []string{}
+	for _, backupCode := range backupCodes {
+		if backupCode == code {
+			found = true
+		} else {
+			newBackupCodes = append(newBackupCodes, backupCode)
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("invalid backup code")
+	}
+
+	// Update backup codes without the used one
+	return v.SetUserMFA(userID, secret, newBackupCodes)
+}
+
+func (v *SQLiteVaultStorage) InvalidateBackupCode(userID, code string) error {
+	return v.ValidateBackupCode(userID, code) // Same logic
 }

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MFA Disabled Successfully</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gradient-to-br from-yellow-50 to-orange-100 min-h-screen">
+    <div class="container mx-auto px-4 py-12 max-w-lg">
+        <div class="bg-white rounded-xl shadow-lg p-8 text-center">
+            <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z">
+                    </path>
+                </svg>
+            </div>
+
+            <h1 class="text-2xl font-bold text-gray-900 mb-4">MFA Disabled</h1>
+
+            <p class="text-gray-600 mb-6">
+                Multi-Factor Authentication has been disabled for your account. You can re-enable it at any time from
+                your account settings.
+            </p>
+
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <p class="text-sm text-yellow-800">
+                    <strong>Security Notice:</strong> Your account is now less secure without MFA. Consider re-enabling
+                    it for better protection.
+                </p>
+            </div>
+
+            <div class="space-y-3">
+                <a href="/protected"
+                    class="block w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors">
+                    Go to Dashboard
+                </a>
+
+                <a href="/mfa/setup"
+                    class="block w-full bg-green-100 hover:bg-green-200 text-green-700 font-semibold py-3 px-4 rounded-lg transition-colors">
+                    Re-enable MFA
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -730,6 +730,23 @@ func processSimpleLoginHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
+		// Check if MFA is enabled for this user
+		mfaEnabled, err := manager.Vault.IsUserMFAEnabled(info.UserID)
+		if err == nil && mfaEnabled {
+			// Store login state temporarily for MFA verification
+			setSessionData(w, "login_username", username)
+			setSessionData(w, "login_client_id", clientID)
+			setSessionData(w, "login_redirect_uri", redirectURI)
+			setSessionData(w, "login_scope", scope)
+			setSessionData(w, "login_state", state)
+
+			// Redirect to MFA verification
+			manager.renderTemplate(w, "mfa-verify.html", map[string]interface{}{
+				"Username": username,
+			})
+			return
+		}
+
 		// Clear failed login attempts on successful login
 		manager.Security.ClearLoginAttempts(loginIdentifier)
 
@@ -909,7 +926,6 @@ func processSecuredLoginHandler(cfg *Config) http.HandlerFunc {
 				fmt.Sprintf("Password hash retrieval failed: %v", err), "/login")
 			return
 		}
-
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
 			// Phase 1: Record failed login attempt
 			manager.Security.RecordFailedLogin(loginIdentifier)
@@ -919,7 +935,6 @@ func processSecuredLoginHandler(cfg *Config) http.HandlerFunc {
 				"Password verification failed", "/login")
 			return
 		}
-
 		privD := decryptPrivateKeyD(encPrivD, password)
 		if _, err := hex.DecodeString(privD); err != nil {
 			log.Printf("Decrypted PrivateKeyD is not valid hex: %v", err)
@@ -961,6 +976,7 @@ func processSecuredLoginHandler(cfg *Config) http.HandlerFunc {
 		http.Redirect(w, r, "/protected", http.StatusSeeOther)
 	}
 }
+
 func apiStatusHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "online",
@@ -1028,18 +1044,22 @@ func apiUserInfoHandler(cfg *Config) http.HandlerFunc {
 			return
 		}
 
+		// Get MFA status
+		mfaEnabled, _ := manager.Vault.IsUserMFAEnabled(info.UserID)
+
 		iat, _ := claims["iat"].(float64)
 		exp_claim, _ := claims["exp"].(float64)
 
 		writeJSON(w, http.StatusOK, map[string]any{
 			"authenticated": true,
 			"user": map[string]any{
-				"id":         info.UserID,
-				"username":   info.Username,
-				"login_type": info.LoginType,
-				"pubKeyX":    pubKeyX,
-				"pubKeyY":    pubKeyY,
-				"pubHex":     pubHex,
+				"id":          info.UserID,
+				"username":    info.Username,
+				"login_type":  info.LoginType,
+				"mfa_enabled": mfaEnabled,
+				"pubKeyX":     pubKeyX,
+				"pubKeyY":     pubKeyY,
+				"pubHex":      pubHex,
 			},
 			"session": map[string]any{
 				"issuedAt":  int64(iat),
@@ -1721,4 +1741,396 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonData, _ := json.Marshal(keyData)
 	manager.renderTemplate(w, "download-key-file.html", map[string]any{"KeyJson": template.JS(string(jsonData))})
+}
+
+// --- MFA Handlers ---
+
+// mfaSetupHandler handles MFA setup for authenticated users
+func mfaSetupHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pubHex, _ := r.Context().Value("user").(string)
+		userInfo, exists := lookupUserByPubHex(pubHex)
+		if !exists {
+			renderErrorPage(w, http.StatusNotFound, "User Not Found",
+				"User information could not be retrieved.",
+				"Please log in again.", "User not found during MFA setup", "/login")
+			return
+		}
+
+		if r.Method == "GET" {
+			// Check if MFA is already enabled
+			mfaEnabled, _ := manager.Vault.IsUserMFAEnabled(userInfo.UserID)
+			if mfaEnabled {
+				renderErrorPage(w, http.StatusBadRequest, "MFA Already Enabled",
+					"Multi-Factor Authentication is already enabled for your account.",
+					"You can disable MFA first if you want to set it up again.", "", "/protected")
+				return
+			}
+
+			// Generate new MFA secret and QR code
+			secret, qrCode, err := GenerateMFASecret(userInfo.Username, "Auth System")
+			if err != nil {
+				renderErrorPage(w, http.StatusInternalServerError, "MFA Setup Error",
+					"Failed to generate MFA credentials.",
+					"Please try again later.", fmt.Sprintf("MFA generation error: %v", err), "/protected")
+				return
+			}
+
+			// Generate backup codes
+			backupCodes, err := GenerateBackupCodes(10)
+			if err != nil {
+				renderErrorPage(w, http.StatusInternalServerError, "Backup Codes Error",
+					"Failed to generate backup codes.",
+					"Please try again later.", fmt.Sprintf("Backup codes error: %v", err), "/protected")
+				return
+			}
+
+			// Store in session temporarily (not in database yet)
+			setSessionData(w, "mfa_temp_secret", secret)
+			setSessionData(w, "mfa_temp_backup_codes", strings.Join(backupCodes, ","))
+			qrCode = strings.ReplaceAll(qrCode, "data:image/png;base64,", "")
+			data := MFASetupData{
+				Secret:      secret,
+				QRCode:      qrCode,
+				BackupCodes: backupCodes,
+			}
+
+			manager.renderTemplate(w, "mfa-setup.html", data)
+			return
+		}
+
+		if r.Method == "POST" {
+			// Verify the TOTP code before enabling MFA
+			code := r.FormValue("code")
+			if code == "" {
+				renderErrorPage(w, http.StatusBadRequest, "Verification Code Required",
+					"Please enter the verification code from your authenticator app.",
+					"", "", "/mfa/setup")
+				return
+			}
+
+			// Get temporary secret from session
+			tempSecret, exists := getSessionData(r, "mfa_temp_secret")
+			if !exists || tempSecret == "" {
+				renderErrorPage(w, http.StatusBadRequest, "Setup Session Expired",
+					"MFA setup session has expired.",
+					"Please start the setup process again.", "", "/mfa/setup")
+				return
+			}
+
+			// Verify the code
+			if !VerifyMFACode(code, tempSecret) {
+				renderErrorPage(w, http.StatusBadRequest, "Invalid Verification Code",
+					"The verification code is incorrect.",
+					"Please check your authenticator app and try again.", "", "/mfa/setup")
+				return
+			}
+
+			// Get backup codes from session
+			tempBackupCodesStr, _ := getSessionData(r, "mfa_temp_backup_codes")
+			backupCodes := strings.Split(tempBackupCodesStr, ",")
+
+			// Save MFA settings to database
+			err := manager.Vault.SetUserMFA(userInfo.UserID, tempSecret, backupCodes)
+			if err != nil {
+				renderErrorPage(w, http.StatusInternalServerError, "Database Error",
+					"Failed to save MFA settings.",
+					"Please try again later.", fmt.Sprintf("MFA save error: %v", err), "/protected")
+				return
+			}
+
+			// Enable MFA for the user
+			err = manager.Vault.EnableMFA(userInfo.UserID)
+			if err != nil {
+				renderErrorPage(w, http.StatusInternalServerError, "MFA Enable Error",
+					"Failed to enable MFA for your account.",
+					"Please try again later.", fmt.Sprintf("MFA enable error: %v", err), "/protected")
+				return
+			}
+
+			// Clear session data
+			clearSessionData(w, "mfa_temp_secret")
+			clearSessionData(w, "mfa_temp_backup_codes")
+
+			manager.renderTemplate(w, "mfa-enabled.html", nil)
+		}
+	}
+}
+
+// mfaVerifyHandler handles MFA code verification during login
+func mfaVerifyHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			manager.renderTemplate(w, "mfa-verify.html", nil)
+			return
+		}
+
+		if r.Method == "POST" {
+			username := r.FormValue("username")
+			code := r.FormValue("code")
+
+			if username == "" || code == "" {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(LoginStepResponse{
+					Step:    "error",
+					Message: "Username and code are required",
+				})
+				return
+			}
+
+			// Get user info
+			userInfo, exists := lookupUserByUsername(username)
+			if !exists {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusNotFound)
+				json.NewEncoder(w).Encode(LoginStepResponse{
+					Step:    "error",
+					Message: "User not found",
+				})
+				return
+			}
+
+			// Check if MFA is enabled
+			mfaEnabled, err := manager.Vault.IsUserMFAEnabled(userInfo.UserID)
+			if err != nil || !mfaEnabled {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(LoginStepResponse{
+					Step:    "error",
+					Message: "MFA not enabled for this user",
+				})
+				return
+			}
+
+			// Get MFA secret and backup codes
+			secret, backupCodes, err := manager.Vault.GetUserMFA(userInfo.UserID)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(LoginStepResponse{
+					Step:    "error",
+					Message: "Failed to retrieve MFA settings",
+				})
+				return
+			}
+
+			isValid := false
+
+			// Check if it's a TOTP code
+			if len(code) == 6 {
+				isValid = VerifyMFACode(code, secret)
+			} else if IsBackupCodeFormat(code) {
+				// Check backup codes
+				formattedCode := FormatBackupCode(code)
+				for _, backupCode := range backupCodes {
+					if backupCode == formattedCode {
+						isValid = true
+						// Invalidate the used backup code
+						manager.Vault.InvalidateBackupCode(userInfo.UserID, formattedCode)
+						break
+					}
+				}
+			}
+
+			if !isValid {
+				// Record failed login attempt
+				clientIP := getClientIP(r)
+				manager.Security.RecordFailedLogin(clientIP)
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(LoginStepResponse{
+					Step:    "error",
+					Message: "Invalid MFA code",
+				})
+				return
+			}
+
+			// MFA verification successful
+			// Get stored login data
+			clientID, _ := getSessionData(r, "login_client_id")
+			redirectURI, _ := getSessionData(r, "login_redirect_uri")
+			scope, _ := getSessionData(r, "login_scope")
+			state, _ := getSessionData(r, "login_state")
+
+			// Clear login session data
+			clearSessionData(w, "login_username")
+			clearSessionData(w, "login_client_id")
+			clearSessionData(w, "login_redirect_uri")
+			clearSessionData(w, "login_scope")
+			clearSessionData(w, "login_state")
+
+			// Get public key for token creation
+			pubKeyX, pubKeyY, err := getPublicKeyByUserID(userInfo.UserID)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(LoginStepResponse{
+					Step:    "error",
+					Message: "Failed to retrieve account keys",
+				})
+				return
+			}
+
+			pubHex := pubKeyX + ":" + pubKeyY
+			nonce, ts := getNonceWithTimestamp()
+
+			// Create token claims
+			claims := getClaims(pubHex, nonce, ts)
+
+			// Create PASETO token
+			t := token.CreateToken(expDuration, token.AlgEncrypt)
+			_ = token.RegisterClaims(t, claims)
+			tokenStr, err := token.EncryptToken(t, cfg.PasetoSecret)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(LoginStepResponse{
+					Step:    "error",
+					Message: "Failed to create authentication token",
+				})
+				return
+			}
+
+			// Set cookie and clear any previous logout state
+			initUserLogoutTracker()
+			userLogoutTracker.ClearUserLogout(userInfo.UserID)
+			http.SetCookie(w, getCookie(tokenStr))
+
+			// Determine redirect URL
+			redirectURL := "/protected"
+			if clientID != "" && redirectURI != "" {
+				// OAuth authorization flow
+				redirectURL = fmt.Sprintf("/oauth/authorize?client_id=%s&redirect_uri=%s&response_type=code",
+					url.QueryEscape(clientID), url.QueryEscape(redirectURI))
+				if scope != "" {
+					redirectURL += "&scope=" + url.QueryEscape(scope)
+				}
+				if state != "" {
+					redirectURL += "&state=" + url.QueryEscape(state)
+				}
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(LoginStepResponse{
+				Step:    "success",
+				Message: "Login successful",
+				UserID:  userInfo.UserID,
+			})
+		}
+	}
+}
+
+// mfaDisableHandler handles MFA disabling for authenticated users
+func mfaDisableHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get user from session
+		username, exists := getSessionUsername(r, cfg)
+		if !exists {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		userInfo, exists := lookupUserByUsername(username)
+		if !exists {
+			renderErrorPage(w, http.StatusNotFound, "User Not Found",
+				"User information could not be retrieved.",
+				"Please log in again.", "User not found during MFA disable", "/login")
+			return
+		}
+
+		if r.Method == "POST" {
+			// Verify current password or MFA code before disabling
+			password := r.FormValue("password")
+			if password == "" {
+				renderErrorPage(w, http.StatusBadRequest, "Password Required",
+					"Please enter your current password to disable MFA.",
+					"", "", "/protected")
+				return
+			}
+
+			// Verify password
+			storedSecret, err := manager.Vault.GetUserSecret(userInfo.UserID)
+			if err != nil || !verifyPassword(password, storedSecret) {
+				renderErrorPage(w, http.StatusUnauthorized, "Invalid Password",
+					"The password you entered is incorrect.",
+					"Please try again.", "", "/protected")
+				return
+			}
+
+			// Disable MFA
+			err = manager.Vault.DisableMFA(userInfo.UserID)
+			if err != nil {
+				renderErrorPage(w, http.StatusInternalServerError, "MFA Disable Error",
+					"Failed to disable MFA for your account.",
+					"Please try again later.", fmt.Sprintf("MFA disable error: %v", err), "/protected")
+				return
+			}
+
+			manager.renderTemplate(w, "mfa-disabled.html", nil)
+		}
+	}
+}
+
+// mfaBackupCodesHandler handles regenerating backup codes
+func mfaBackupCodesHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get user from session
+		username, exists := getSessionUsername(r, cfg)
+		if !exists {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		userInfo, exists := lookupUserByUsername(username)
+		if !exists {
+			renderErrorPage(w, http.StatusNotFound, "User Not Found",
+				"User information could not be retrieved.",
+				"Please log in again.", "User not found during backup codes generation", "/login")
+			return
+		}
+
+		// Check if MFA is enabled
+		mfaEnabled, err := manager.Vault.IsUserMFAEnabled(userInfo.UserID)
+		if err != nil || !mfaEnabled {
+			renderErrorPage(w, http.StatusBadRequest, "MFA Not Enabled",
+				"Multi-Factor Authentication is not enabled for your account.",
+				"Please enable MFA first.", "", "/protected")
+			return
+		}
+
+		if r.Method == "POST" {
+			// Generate new backup codes
+			backupCodes, err := GenerateBackupCodes(10)
+			if err != nil {
+				renderErrorPage(w, http.StatusInternalServerError, "Backup Codes Error",
+					"Failed to generate new backup codes.",
+					"Please try again later.", fmt.Sprintf("Backup codes error: %v", err), "/protected")
+				return
+			}
+
+			// Get current MFA secret
+			secret, _, err := manager.Vault.GetUserMFA(userInfo.UserID)
+			if err != nil {
+				renderErrorPage(w, http.StatusInternalServerError, "MFA Settings Error",
+					"Failed to retrieve MFA settings.",
+					"Please try again later.", fmt.Sprintf("MFA get error: %v", err), "/protected")
+				return
+			}
+
+			// Update with new backup codes
+			err = manager.Vault.SetUserMFA(userInfo.UserID, secret, backupCodes)
+			if err != nil {
+				renderErrorPage(w, http.StatusInternalServerError, "Database Error",
+					"Failed to save new backup codes.",
+					"Please try again later.", fmt.Sprintf("Backup codes save error: %v", err), "/protected")
+				return
+			}
+
+			manager.renderTemplate(w, "mfa-backup-codes.html", map[string]interface{}{
+				"BackupCodes": backupCodes,
+			})
+		}
+	}
 }

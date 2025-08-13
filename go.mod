@@ -6,10 +6,13 @@ require (
 	github.com/oarkflow/paseto v0.0.4
 	github.com/oarkflow/squealx v0.0.54
 	github.com/oarkflow/xid v1.2.8
+	github.com/pquerna/otp v1.4.0
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	golang.org/x/crypto v0.39.0
 )
 
 require (
+	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/goccy/go-reflect v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect

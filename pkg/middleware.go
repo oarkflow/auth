@@ -2,8 +2,8 @@ package pkg
 
 import (
 	"context"
-	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/oarkflow/paseto/token"
 )
@@ -24,27 +24,39 @@ func pasetoMiddleware(cfg *Config, next http.Handler) http.Handler {
 			}
 		}
 		if tokenStr == "" {
-			renderErrorPage(w, http.StatusUnauthorized, "Authentication Required",
-				"You must be logged in to access this page.",
-				"Please log in to your account to continue.",
-				"No authentication token found", "/login")
+			// Check if this is an API request or browser request
+			if isAPIRequest(r) {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{
+					"error": "authentication required",
+				})
+			} else {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+			}
 			return
 		}
 		manager.CleanupExpiredTokens()
 
 		if manager.IsTokenDenylisted(tokenStr) {
-			renderErrorPage(w, http.StatusUnauthorized, "Session Expired",
-				"Your session has been terminated.",
-				"Please log in again to access your account.",
-				"Token found in logout denylist", "/login")
+			// Check if this is an API request or browser request
+			if isAPIRequest(r) {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{
+					"error": "session expired",
+				})
+			} else {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+			}
 			return
 		}
 		decTok, err := token.DecryptToken(tokenStr, cfg.PasetoSecret)
 		if err != nil {
-			renderErrorPage(w, http.StatusUnauthorized, "Invalid Session",
-				"Your authentication session is invalid or corrupted.",
-				"Please log in again to continue.",
-				fmt.Sprintf("Token decryption failed: %v", err), "/login")
+			// Check if this is an API request or browser request
+			if isAPIRequest(r) {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{
+					"error": "invalid session",
+				})
+			} else {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+			}
 			return
 		}
 		claims := decTok.Claims
@@ -57,6 +69,28 @@ func pasetoMiddleware(cfg *Config, next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// Helper function to determine if this is an API request
+func isAPIRequest(r *http.Request) bool {
+	// Check if the request path starts with /api/
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		return true
+	}
+
+	// Check Accept header for JSON
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "application/json") {
+		return true
+	}
+
+	// Check Content-Type header for JSON
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		return true
+	}
+
+	return false
 }
 
 // --- Utility Functions ---

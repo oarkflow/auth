@@ -20,7 +20,7 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 
 			// Content Security Policy
-			csp := "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data:; font-src 'self'; connect-src 'self'"
+			csp := "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data:; font-src 'self'; connect-src 'self'"
 			w.Header().Set("Content-Security-Policy", csp)
 
 			// HSTS header for HTTPS

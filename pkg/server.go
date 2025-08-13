@@ -54,6 +54,12 @@ func setupRoutes() http.Handler {
 	mux.Handle("/protected", pasetoMiddleware(manager.Config, protectedHandler()))
 	mux.Handle("/secured-area", proofAuthMiddleware(proofProtectedHandler()))
 
+	// MFA routes
+	mux.Handle("/mfa/setup", pasetoMiddleware(manager.Config, http.HandlerFunc(mfaSetupHandler(manager.Config))))
+	mux.Handle("/mfa/verify", rateLimitMiddleware(loginProtectionMiddleware(http.HandlerFunc(mfaVerifyHandler(manager.Config)))))
+	mux.Handle("/mfa/disable", pasetoMiddleware(manager.Config, http.HandlerFunc(mfaDisableHandler(manager.Config))))
+	mux.Handle("/mfa/backup-codes", pasetoMiddleware(manager.Config, http.HandlerFunc(mfaBackupCodesHandler(manager.Config))))
+
 	// OAuth 2.0 Authorization Server endpoints
 	mux.Handle("/oauth/authorize", rateLimitMiddleware(http.HandlerFunc(oauthAuthorizeHandler(manager.Config))))
 	mux.Handle("/oauth/consent", rateLimitMiddleware(http.HandlerFunc(oauthConsentHandler(manager.Config))))
