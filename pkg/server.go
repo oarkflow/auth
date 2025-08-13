@@ -1,4 +1,4 @@
-package main
+package pkg
 
 import (
 	"context"
@@ -21,7 +21,7 @@ const (
 	passwordResetTokenExp = 30 * time.Minute
 )
 
-func main() {
+func Init() {
 	manager = NewManager()
 	srv := &http.Server{
 		Addr:         manager.Config.Addr,

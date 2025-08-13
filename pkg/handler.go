@@ -1,4 +1,4 @@
-package main
+package pkg
 
 import (
 	"context"
@@ -1675,8 +1675,10 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 	// Get login type preference
 	loginType, err := manager.Vault.GetUserSecret(username + "_logintype")
 	if err != nil {
+		panic(err)
 		loginType = "simple" // default to simple
 	}
+	fmt.Println(loginType)
 	manager.Vault.SetUserSecret(username+"_logintype", "") // Remove temp
 
 	// Generate key pair after verification
@@ -1705,6 +1707,10 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 			"Failed to complete account setup due to missing password information.",
 			"There was an issue finalizing your account. Please try registering again.",
 			"Password not found for key encryption during verification", "/register")
+		return
+	}
+	if loginType == "simple" {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	encPrivD := encryptPrivateKeyD(privd, password)
