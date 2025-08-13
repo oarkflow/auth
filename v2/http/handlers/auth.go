@@ -153,7 +153,7 @@ func VerifyPage(c *fiber.Ctx) error {
 			"Password not found for key encryption during verification", "/register")
 	}
 	if loginType == "simple" {
-		return c.Redirect("/login", http.StatusSeeOther)
+		return c.Redirect(LoginURI, http.StatusSeeOther)
 	}
 	encPrivD := utils.EncryptPrivateKeyD(privd, password)
 	keyData := map[string]string{
@@ -690,7 +690,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		objects.Manager.UserLogoutTracker.ClearUserLogout(userInfo.UserID)
 	}
 	c.Cookie(utils.GetCookie(objects.Manager.Config.EnableHTTPS, objects.Manager.Config.Environment, "session_token", tokenStr))
-	return c.Redirect("/app", fiber.StatusSeeOther)
+	return c.Redirect(AppURI, fiber.StatusSeeOther)
 }
 
 func PostSecureLogin(c *fiber.Ctx) error {
@@ -844,7 +844,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 			fmt.Sprintf("PASETO token encryption failed: %v", err), "/login")
 	}
 	c.Cookie(utils.GetCookie(objects.Manager.Config.EnableHTTPS, objects.Manager.Config.Environment, "session_token", tokenStr))
-	return c.Redirect("/app", fiber.StatusSeeOther)
+	return c.Redirect(AppURI, fiber.StatusSeeOther)
 }
 
 func PostLogout(c *fiber.Ctx) error {
@@ -894,7 +894,7 @@ func PostLogout(c *fiber.Ctx) error {
 	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	c.Set("Pragma", "no-cache")
 	c.Set("Expires", "0")
-	return c.Redirect("/logout?success=1", http.StatusSeeOther)
+	return c.Redirect(LogoutURI+"?success=1", http.StatusSeeOther)
 }
 
 func renderErrorPage(c *fiber.Ctx, statusCode int, title, message, description, technical, retryURL string) error {
