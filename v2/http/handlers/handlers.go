@@ -6,6 +6,7 @@ import (
 
 var (
 	LandingURI        = "/"
+	HealthURI         = "/health"
 	AppURI            = "/app"
 	LoginURI          = "/login"
 	RegisterURI       = "/register"
@@ -24,6 +25,7 @@ var (
 
 func Setup(prefix string, router fiber.Router) {
 	route := router.Group(prefix)
+	route.Get(HealthURI, HealthCheck)
 	route.Get(LandingURI, LandingPage)
 	route.Get(VerifyURI, VerifyPage)
 	route.Get(LoginURI, LoginPage)

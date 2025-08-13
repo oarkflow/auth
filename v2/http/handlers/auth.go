@@ -38,6 +38,12 @@ func DashboardPage(c *fiber.Ctx) error {
 	})
 }
 
+func HealthCheck(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{
+		"status": "ok",
+	})
+}
+
 func LandingPage(c *fiber.Ctx) error {
 	return c.Render("index", fiber.Map{
 		"Title": "Welcome to the Auth Service",

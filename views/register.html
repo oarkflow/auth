@@ -42,7 +42,7 @@
 
             <!-- Registration Form -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-                <form action="/register" method="POST" class="space-y-6">
+                <form action="{{uris.Register}}" method="POST" class="space-y-6">
                     <!-- Username/Email Field -->
                     <div>
                         <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
@@ -155,7 +155,7 @@
             <!-- Additional Options -->
             <div class="text-center space-y-3">
                 <div>
-                    <a href="/login" class="text-sm text-gray-600 hover:text-gray-800">
+                    <a href="{{uris.Login}}" class="text-sm text-gray-600 hover:text-gray-800">
                         Already have an account? <span class="font-medium text-primary-600 hover:text-primary-500">Sign
                             in</span>
                     </a>

@@ -44,7 +44,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-12">
 
                 <!-- User Login -->
-                <a href="/login"
+                <a href="{{uris.Login}}"
                     class="group relative bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 hover:border-primary-300">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
@@ -64,7 +64,7 @@
                 </a>
 
                 <!-- Register Account -->
-                <a href="/register"
+                <a href="{{uris.Register}}"
                     class="group relative bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 hover:border-primary-300">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
@@ -84,53 +84,8 @@
                     </div>
                 </a>
 
-                <!-- OAuth Client Registration -->
-                <a href="/oauth/clients/register"
-                    class="group relative bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 hover:border-primary-300">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="h-10 w-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                                <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
-                                    </path>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="text-lg font-semibold text-gray-900 group-hover:text-primary-600">Register App
-                            </h3>
-                            <p class="text-sm text-gray-500">Register OAuth client</p>
-                        </div>
-                    </div>
-                </a>
-
-                <!-- API Demo -->
-                <a href="/api-demo"
-                    class="group relative bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 hover:border-primary-300">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="h-10 w-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                                <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a4 4 0 004-4V5z">
-                                    </path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="text-lg font-semibold text-gray-900 group-hover:text-primary-600">API Demo</h3>
-                            <p class="text-sm text-gray-500">Test authentication APIs</p>
-                        </div>
-                    </div>
-                </a>
-
                 <!-- Protected Area -->
-                <a href="/protected"
+                <a href="{{uris.App}}"
                     class="group relative bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 hover:border-primary-300">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
@@ -151,7 +106,7 @@
                 </a>
 
                 <!-- Health Check -->
-                <a href="/health"
+                <a href="{{uris.Health}}"
                     class="group relative bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 hover:border-primary-300">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">

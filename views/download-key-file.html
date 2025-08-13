@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +11,7 @@
             padding: 0;
             box-sizing: border-box;
         }
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
@@ -19,10 +21,19 @@
             justify-content: center;
             animation: gradientShift 8s ease infinite;
         }
+
         @keyframes gradientShift {
-            0%, 100% { background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%); }
-            50% { background: linear-gradient(135deg, #059669 0%, #047857 50%, #10b981 100%); }
+
+            0%,
+            100% {
+                background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+            }
+
+            50% {
+                background: linear-gradient(135deg, #059669 0%, #047857 50%, #10b981 100%);
+            }
         }
+
         .success-container {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(20px);
@@ -36,6 +47,7 @@
             position: relative;
             overflow: hidden;
         }
+
         .success-container::before {
             content: '';
             position: absolute;
@@ -47,20 +59,38 @@
             background-size: 200% 100%;
             animation: borderFlow 3s linear infinite;
         }
+
         @keyframes borderFlow {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
         }
+
         .success-icon {
             font-size: 5rem;
             margin-bottom: 30px;
             display: block;
             animation: successPulse 2s ease-in-out infinite;
         }
+
         @keyframes successPulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.8; }
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 0.8;
+            }
         }
+
         h1 {
             color: #1f2937;
             font-size: 3rem;
@@ -68,12 +98,14 @@
             margin-bottom: 20px;
             letter-spacing: -0.02em;
         }
+
         .subtitle {
             color: #059669;
             font-size: 1.4rem;
             font-weight: 600;
             margin-bottom: 40px;
         }
+
         .download-status {
             background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
             border-left: 5px solid #10b981;
@@ -82,6 +114,7 @@
             margin-bottom: 40px;
             text-align: left;
         }
+
         .download-status h3 {
             color: #065f46;
             font-size: 1.3rem;
@@ -90,6 +123,7 @@
             align-items: center;
             gap: 12px;
         }
+
         .download-progress {
             background: #047857;
             height: 8px;
@@ -98,16 +132,24 @@
             overflow: hidden;
             position: relative;
         }
+
         .progress-bar {
             height: 100%;
             background: linear-gradient(90deg, #10b981, #34d399);
             border-radius: 4px;
             animation: downloadProgress 3s ease-out forwards;
         }
+
         @keyframes downloadProgress {
-            0% { width: 0%; }
-            100% { width: 100%; }
+            0% {
+                width: 0%;
+            }
+
+            100% {
+                width: 100%;
+            }
         }
+
         .security-instructions {
             background: rgba(255, 255, 255, 0.7);
             border-radius: 16px;
@@ -116,6 +158,7 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
             text-align: left;
         }
+
         .security-instructions h3 {
             color: #1f2937;
             font-size: 1.2rem;
@@ -124,10 +167,12 @@
             align-items: center;
             gap: 10px;
         }
+
         .instruction-list {
             list-style: none;
             padding: 0;
         }
+
         .instruction-item {
             display: flex;
             align-items: flex-start;
@@ -138,6 +183,7 @@
             border-radius: 10px;
             border-left: 3px solid #10b981;
         }
+
         .instruction-number {
             background: #10b981;
             color: white;
@@ -151,13 +197,16 @@
             font-size: 0.9rem;
             flex-shrink: 0;
         }
+
         .instruction-text {
             color: #374151;
             line-height: 1.6;
         }
+
         .instruction-text strong {
             color: #1f2937;
         }
+
         .warning-box {
             background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
             border-left: 5px solid #f59e0b;
@@ -165,6 +214,7 @@
             border-radius: 12px;
             margin-bottom: 30px;
         }
+
         .warning-box h4 {
             color: #92400e;
             font-size: 1.1rem;
@@ -173,17 +223,20 @@
             align-items: center;
             gap: 10px;
         }
+
         .warning-box p {
             color: #374151;
             font-size: 0.95rem;
             line-height: 1.5;
         }
+
         .action-buttons {
             display: flex;
             gap: 20px;
             justify-content: center;
             flex-wrap: wrap;
         }
+
         .btn {
             padding: 16px 32px;
             border: none;
@@ -201,6 +254,7 @@
             position: relative;
             overflow: hidden;
         }
+
         .btn::before {
             content: '';
             position: absolute;
@@ -211,27 +265,33 @@
             background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
             transition: left 0.5s;
         }
+
         .btn:hover::before {
             left: 100%;
         }
+
         .btn-primary {
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
             color: white;
             box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
         }
+
         .btn-primary:hover {
             transform: translateY(-3px);
             box-shadow: 0 12px 35px rgba(16, 185, 129, 0.4);
         }
+
         .btn-secondary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
         }
+
         .btn-secondary:hover {
             transform: translateY(-3px);
             box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4);
         }
+
         .file-info {
             background: rgba(255, 255, 255, 0.6);
             border-radius: 12px;
@@ -239,6 +299,7 @@
             margin-top: 30px;
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
+
         .file-info h4 {
             color: #374151;
             margin-bottom: 15px;
@@ -246,39 +307,52 @@
             align-items: center;
             gap: 10px;
         }
+
         .file-details {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
         }
+
         .file-detail {
             text-align: center;
             padding: 15px;
             background: rgba(16, 185, 129, 0.1);
             border-radius: 8px;
         }
+
         .detail-value {
             font-size: 1.2rem;
             font-weight: 600;
             color: #047857;
             display: block;
         }
+
         .detail-label {
             font-size: 0.9rem;
             color: #6b7280;
             margin-top: 5px;
         }
+
         @media (max-width: 768px) {
             .success-container {
                 padding: 40px 30px;
                 margin: 20px;
             }
-            h1 { font-size: 2.2rem; }
-            .subtitle { font-size: 1.1rem; }
+
+            h1 {
+                font-size: 2.2rem;
+            }
+
+            .subtitle {
+                font-size: 1.1rem;
+            }
+
             .action-buttons {
                 flex-direction: column;
                 align-items: center;
             }
+
             .btn {
                 width: 100%;
                 max-width: 300px;
@@ -286,11 +360,11 @@
         }
     </style>
     <script>
-        window.onload = function() {
+        window.onload = function () {
             // Start download animation
             setTimeout(() => {
-                const data = {{.KeyJson}};
-                const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+                const data = "{{.KeyJson}}".substring(1, x.length() - 1);
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -299,6 +373,7 @@
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
+
 
                 // Update UI after download
                 setTimeout(() => {
@@ -310,120 +385,127 @@
         };
     </script>
 </head>
+
 <body>
-<div class="success-container">
-    <span class="success-icon">🎉</span>
-    <h1>Account Verified!</h1>
-    <p class="subtitle">Your secure cryptographic credentials are ready</p>
+    <div class="success-container">
+        <span class="success-icon">🎉</span>
+        <h1>Account Verified!</h1>
+        <p class="subtitle">Your secure cryptographic credentials are ready</p>
 
-    <div class="download-status" id="downloadStatus">
-        <h3>📥 Downloading Your Key File...</h3>
-        <p>Please wait while we prepare your encrypted credentials file.</p>
-        <div class="download-progress">
-            <div class="progress-bar"></div>
+        <div class="download-status" id="downloadStatus">
+            <h3>📥 Downloading Your Key File...</h3>
+            <p>Please wait while we prepare your encrypted credentials file.</p>
+            <div class="download-progress">
+                <div class="progress-bar"></div>
+            </div>
+        </div>
+
+        <div class="security-instructions">
+            <h3>🔐 Essential Security Instructions</h3>
+            <ul class="instruction-list">
+                <li class="instruction-item">
+                    <div class="instruction-number">1</div>
+                    <div class="instruction-text">
+                        <strong>Save Securely:</strong> Store your credentials.json file in a secure location,
+                        preferably encrypted storage or a password manager.
+                    </div>
+                </li>
+                <li class="instruction-item">
+                    <div class="instruction-number">2</div>
+                    <div class="instruction-text">
+                        <strong>Remember Password:</strong> Your password is required to decrypt the private key for
+                        login. Store it safely.
+                    </div>
+                </li>
+                <li class="instruction-item">
+                    <div class="instruction-number">3</div>
+                    <div class="instruction-text">
+                        <strong>Backup Copies:</strong> Create secure backups of both your key file and password in
+                        separate locations.
+                    </div>
+                </li>
+                <li class="instruction-item">
+                    <div class="instruction-number">4</div>
+                    <div class="instruction-text">
+                        <strong>Never Share:</strong> Your key file and password should never be shared with anyone or
+                        transmitted over insecure channels.
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="warning-box">
+            <h4>⚠️ Important Notice</h4>
+            <p>If you lose both your key file and password, you will not be able to access your account. There is no
+                password recovery for cryptographic authentication. Please ensure you have secure backups.</p>
+        </div>
+
+        <div class="file-info">
+            <h4>📄 File Information</h4>
+            <div class="file-details">
+                <div class="file-detail">
+                    <span class="detail-value">credentials.json</span>
+                    <div class="detail-label">Filename</div>
+                </div>
+                <div class="file-detail">
+                    <span class="detail-value">AES-256</span>
+                    <div class="detail-label">Encryption</div>
+                </div>
+                <div class="file-detail">
+                    <span class="detail-value">ECDSA</span>
+                    <div class="detail-label">Key Type</div>
+                </div>
+                <div class="file-detail">
+                    <span class="detail-value">PBKDF2</span>
+                    <div class="detail-label">Derivation</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <a href="{{uris.Login}}" class="btn btn-primary" id="continueBtn" style="display: none;">
+                🚀 Continue to Login
+            </a>
+            <a href="{{uris.Landing}}" class="btn btn-secondary">
+                🏠 Back to Home
+            </a>
         </div>
     </div>
 
-    <div class="security-instructions">
-        <h3>🔐 Essential Security Instructions</h3>
-        <ul class="instruction-list">
-            <li class="instruction-item">
-                <div class="instruction-number">1</div>
-                <div class="instruction-text">
-                    <strong>Save Securely:</strong> Store your credentials.json file in a secure location, preferably encrypted storage or a password manager.
-                </div>
-            </li>
-            <li class="instruction-item">
-                <div class="instruction-number">2</div>
-                <div class="instruction-text">
-                    <strong>Remember Password:</strong> Your password is required to decrypt the private key for login. Store it safely.
-                </div>
-            </li>
-            <li class="instruction-item">
-                <div class="instruction-number">3</div>
-                <div class="instruction-text">
-                    <strong>Backup Copies:</strong> Create secure backups of both your key file and password in separate locations.
-                </div>
-            </li>
-            <li class="instruction-item">
-                <div class="instruction-number">4</div>
-                <div class="instruction-text">
-                    <strong>Never Share:</strong> Your key file and password should never be shared with anyone or transmitted over insecure channels.
-                </div>
-            </li>
-        </ul>
-    </div>
-
-    <div class="warning-box">
-        <h4>⚠️ Important Notice</h4>
-        <p>If you lose both your key file and password, you will not be able to access your account. There is no password recovery for cryptographic authentication. Please ensure you have secure backups.</p>
-    </div>
-
-    <div class="file-info">
-        <h4>📄 File Information</h4>
-        <div class="file-details">
-            <div class="file-detail">
-                <span class="detail-value">credentials.json</span>
-                <div class="detail-label">Filename</div>
-            </div>
-            <div class="file-detail">
-                <span class="detail-value">AES-256</span>
-                <div class="detail-label">Encryption</div>
-            </div>
-            <div class="file-detail">
-                <span class="detail-value">ECDSA</span>
-                <div class="detail-label">Key Type</div>
-            </div>
-            <div class="file-detail">
-                <span class="detail-value">PBKDF2</span>
-                <div class="detail-label">Derivation</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="action-buttons">
-        <a href="/login" class="btn btn-primary" id="continueBtn" style="display: none;">
-            🚀 Continue to Login
-        </a>
-        <a href="/" class="btn btn-secondary">
-            🏠 Back to Home
-        </a>
-    </div>
-</div>
-
-<script>
-    // Additional security measures
-    document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-    });
-
-    document.addEventListener('keydown', function(e) {
-        // Disable F12, Ctrl+Shift+I, Ctrl+U
-        if (e.key === 'F12' ||
-            (e.ctrlKey && e.shiftKey && e.key === 'I') ||
-            (e.ctrlKey && e.key === 'u')) {
+    <script>
+        // Additional security measures
+        document.addEventListener('contextmenu', function (e) {
             e.preventDefault();
-        }
-    });
-
-    // Clear any sensitive data on page unload
-    window.addEventListener('beforeunload', function() {
-        // Clear any potential sensitive data from memory
-        if (window.crypto && window.crypto.subtle) {
-            // Modern browsers - additional security
-            sessionStorage.clear();
-        }
-    });
-
-    // Add some interactive feedback
-    document.querySelectorAll('.btn').forEach(btn => {
-        btn.addEventListener('mouseenter', function() {
-            this.style.transform = 'translateY(-3px) scale(1.02)';
         });
-        btn.addEventListener('mouseleave', function() {
-            this.style.transform = 'translateY(0) scale(1)';
+
+        document.addEventListener('keydown', function (e) {
+            // Disable F12, Ctrl+Shift+I, Ctrl+U
+            if (e.key === 'F12' ||
+                (e.ctrlKey && e.shiftKey && e.key === 'I') ||
+                (e.ctrlKey && e.key === 'u')) {
+                e.preventDefault();
+            }
         });
-    });
-</script>
+
+        // Clear any sensitive data on page unload
+        window.addEventListener('beforeunload', function () {
+            // Clear any potential sensitive data from memory
+            if (window.crypto && window.crypto.subtle) {
+                // Modern browsers - additional security
+                sessionStorage.clear();
+            }
+        });
+
+        // Add some interactive feedback
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('mouseenter', function () {
+                this.style.transform = 'translateY(-3px) scale(1.02)';
+            });
+            btn.addEventListener('mouseleave', function () {
+                this.style.transform = 'translateY(0) scale(1)';
+            });
+        });
+    </script>
 </body>
+
 </html>
