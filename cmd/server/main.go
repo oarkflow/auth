@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -18,12 +19,35 @@ import (
 
 	v2 "github.com/oarkflow/auth"
 	"github.com/oarkflow/auth/pkg/config"
-	"github.com/oarkflow/auth/pkg/contracts"
 	"github.com/oarkflow/auth/pkg/objects"
 	"github.com/oarkflow/auth/pkg/utils"
 )
 
-var _ contracts.Config = &Config{}
+func main() {
+	authPlugin := v2.NewPlugin("/")
+	objects.Config = New(".env", true, nil)
+	cfg := config.Config{}
+	cfg.Load()
+	engine := html.NewFileSystem(http.FS(authPlugin.Assets), ".html")
+	engine.Reload(true)
+	engine.AddFuncMap(map[string]any{
+		"unescape": func(s string) template.HTML {
+			return template.HTML(s)
+		},
+		"uris": func() map[string]string {
+			return utils.GetURIs()
+		},
+	})
+	app := fiber.New(fiber.Config{
+		Views:   engine,
+		AppName: objects.Config.GetString("app.name"),
+	})
+	authPlugin.App = app
+	authPlugin.Register()
+	if err := app.Listen(":3000"); err != nil {
+		log.Fatal(err)
+	}
+}
 
 type Config struct {
 	k *koanf.Koanf
@@ -163,26 +187,4 @@ func (app *Config) GetBool(path string, defaultValue ...any) bool {
 		return defaultValue[0].(bool)
 	}
 	return false
-}
-
-func main() {
-	objects.Config = New(".env", true, nil)
-	cfg := config.Config{}
-	cfg.Load()
-	engine := html.New("./views", ".html")
-	engine.Reload(true)
-	engine.AddFuncMap(map[string]any{
-		"unescape": func(s string) template.HTML {
-			return template.HTML(s)
-		},
-		"uris": func() map[string]string {
-			return utils.GetURIs()
-		},
-	})
-	app := fiber.New(fiber.Config{Views: engine})
-	authPlugin := v2.NewPlugin("/", app, engine)
-	authPlugin.Register()
-	if err := app.Listen(":3000"); err != nil {
-		log.Fatal(err)
-	}
 }

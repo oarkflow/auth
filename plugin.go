@@ -1,11 +1,10 @@
 package auth
 
 import (
+	"embed"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
-
-	"embed"
 
 	"github.com/oarkflow/auth/pkg/http/middlewares"
 	"github.com/oarkflow/auth/pkg/http/routes"
@@ -18,9 +17,9 @@ import (
 var Assets embed.FS
 
 type Plugin struct {
-	App        *fiber.App
-	ViewEngine fiber.Views
-	Prefix     string
+	App    *fiber.App
+	Prefix string
+	Assets embed.FS
 }
 
 func (p *Plugin) Register() {
@@ -49,14 +48,18 @@ func (p *Plugin) Close() error {
 	return nil
 }
 
-func NewPlugin(prefix string, app *fiber.App, viewEngine fiber.Views) *Plugin {
+func NewPlugin(prefix string, apps ...*fiber.App) *Plugin {
+	var app *fiber.App
+	if len(apps) > 0 {
+		app = apps[0]
+	}
 	if prefix == "" {
 		prefix = "/"
 	}
 	plugin := &Plugin{
-		Prefix:     prefix,
-		App:        app,
-		ViewEngine: viewEngine,
+		Prefix: prefix,
+		App:    app,
+		Assets: Assets,
 	}
 	return plugin
 }

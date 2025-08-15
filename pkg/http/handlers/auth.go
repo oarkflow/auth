@@ -31,7 +31,7 @@ const (
 func DashboardPage(c *fiber.Ctx) error {
 	pubHex, _ := c.Locals("user").(string)
 	info, _ := objects.Manager.LookupUserByPubHex(pubHex)
-	return c.Render("protected", fiber.Map{
+	return c.Render("views/protected", fiber.Map{
 		"PubHex":   pubHex,
 		"DBUserID": info.UserID,
 		"Username": info.Username,
@@ -45,7 +45,7 @@ func HealthCheck(c *fiber.Ctx) error {
 }
 
 func LandingPage(c *fiber.Ctx) error {
-	return c.Render("index", fiber.Map{
+	return c.Render("views/index", fiber.Map{
 		"Title": "Welcome to the Auth Service",
 	})
 }
@@ -96,7 +96,7 @@ func UserInfoPage(c *fiber.Ctx) error {
 }
 
 func LogoutPage(c *fiber.Ctx) error {
-	return c.Render("logout", fiber.Map{
+	return c.Render("views/logout", fiber.Map{
 		"Title": "Logout page",
 	})
 }
@@ -168,25 +168,25 @@ func VerifyPage(c *fiber.Ctx) error {
 		"EncryptedPrivateKeyD": encPrivD,
 	}
 	jsonData, _ := json.Marshal(keyData)
-	return c.Render("download-key-file", fiber.Map{
+	return c.Render("views/download-key-file", fiber.Map{
 		"KeyJson": template.JS(jsonData),
 	})
 }
 
 func LoginPage(c *fiber.Ctx) error {
-	return c.Render("login", fiber.Map{
+	return c.Render("views/login", fiber.Map{
 		"Title": "Login",
 	})
 }
 
 func RegisterPage(c *fiber.Ctx) error {
-	return c.Render("register", fiber.Map{
+	return c.Render("views/register", fiber.Map{
 		"Title": "Register",
 	})
 }
 
 func ForgotPasswordPage(c *fiber.Ctx) error {
-	return c.Render("forgot-password", fiber.Map{
+	return c.Render("views/forgot-password", fiber.Map{
 		"Title": "Forgot Password",
 	})
 }
@@ -232,11 +232,11 @@ func MFASetupPage(c *fiber.Ctx) error {
 		QRCode:      qrCode,
 		BackupCodes: backupCodes,
 	}
-	return c.Render("mfa-setup", data)
+	return c.Render("views/mfa-setup", data)
 }
 
 func MFAVerifyPage(c *fiber.Ctx) error {
-	return c.Render("mfa-verify", fiber.Map{
+	return c.Render("views/mfa-verify", fiber.Map{
 		"Title": "MFA Verify",
 	})
 }
@@ -277,14 +277,14 @@ func MFABackupCodesPage(c *fiber.Ctx) error {
 			"Failed to save new backup codes.",
 			"Please try again later.", fmt.Sprintf("Backup codes save error: %v", err), "/protected")
 	}
-	return c.Render("mfa-backup-codes", fiber.Map{
+	return c.Render("views/mfa-backup-codes", fiber.Map{
 		"Title":       "MFA Backup Codes",
 		"BackupCodes": backupCodes,
 	})
 }
 
 func OneTimePage(c *fiber.Ctx) error {
-	return c.Render("one-time", fiber.Map{
+	return c.Render("views/one-time", fiber.Map{
 		"Title": "One Time Password",
 	})
 }
@@ -346,7 +346,7 @@ func PostMFASetup(c *fiber.Ctx) error {
 	// Clear session data
 	clearSessionData(c, "mfa_temp_secret")
 	clearSessionData(c, "mfa_temp_backup_codes")
-	return c.Render("mfa-enabled", fiber.Map{
+	return c.Render("views/mfa-enabled", fiber.Map{
 		"Title": "MFA Enabled",
 	})
 }
@@ -354,34 +354,34 @@ func PostMFASetup(c *fiber.Ctx) error {
 func PostMFAVerify(c *fiber.Ctx) error {
 	var req requests.MFARequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Render("mfa-verify", fiber.Map{
+		return c.Render("views/mfa-verify", fiber.Map{
 			"Error": "Unable to parse request data",
 		})
 	}
 	username := utils.SanitizeInput(strings.TrimSpace(req.Username))
 	code := req.Code
 	if username == "" {
-		return c.Render("mfa-verify", fiber.Map{
+		return c.Render("views/mfa-verify", fiber.Map{
 			"Username": username,
 			"Error":    "Username and code are required",
 		})
 	}
 	userInfo, hasUser := objects.Manager.LookupUserByUsername(username)
 	if !hasUser {
-		return c.Render("mfa-verify", fiber.Map{
+		return c.Render("views/mfa-verify", fiber.Map{
 			"Username": username,
 			"Error":    "User not found",
 		})
 	}
 	if !userInfo.MFAEnabled {
-		return c.Render("mfa-verify", fiber.Map{
+		return c.Render("views/mfa-verify", fiber.Map{
 			"Username": username,
 			"Error":    "MFA not enabled for this user",
 		})
 	}
 	secret, backupCodes, err := objects.Manager.Vault().GetUserMFA(userInfo.UserID)
 	if err != nil {
-		return c.Render("mfa-verify", fiber.Map{
+		return c.Render("views/mfa-verify", fiber.Map{
 			"Username": username,
 			"Error":    "Failed to retrieve MFA settings",
 		})
@@ -403,7 +403,7 @@ func PostMFAVerify(c *fiber.Ctx) error {
 	if !isValid {
 		clientIP := utils.GetClientIP(c)
 		objects.Manager.Security().RecordFailedLogin(clientIP)
-		return c.Render("mfa-verify", fiber.Map{
+		return c.Render("views/mfa-verify", fiber.Map{
 			"Username": username,
 			"UserInfo": userInfo,
 			"Error":    "Invalid MFA code. Please try again.",
@@ -412,12 +412,12 @@ func PostMFAVerify(c *fiber.Ctx) error {
 
 	// Based on user's login type, show appropriate login form
 	if userInfo.LoginType == "simple" {
-		return c.Render("simple-login", fiber.Map{
+		return c.Render("views/simple-login", fiber.Map{
 			"Username": username,
 			"UserInfo": userInfo,
 		})
 	}
-	return c.Render("secured-login", fiber.Map{
+	return c.Render("views/secured-login", fiber.Map{
 		"Username": username,
 		"UserInfo": userInfo,
 	})
@@ -433,7 +433,7 @@ func PostMFADisable(c *fiber.Ctx) error {
 	}
 	var req requests.MFADisableRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Render("mfa-verify", fiber.Map{
+		return c.Render("views/mfa-verify", fiber.Map{
 			"Error": "Unable to parse request data",
 		})
 	}
@@ -460,7 +460,7 @@ func PostMFADisable(c *fiber.Ctx) error {
 			"Failed to disable MFA for your account.",
 			"Please try again later.", fmt.Sprintf("MFA disable error: %v", err), "/protected")
 	}
-	return c.Render("mfa-disabled", nil)
+	return c.Render("views/mfa-disabled", nil)
 }
 
 func PostLogin(c *fiber.Ctx) error {
@@ -500,17 +500,17 @@ func PostLogin(c *fiber.Ctx) error {
 			fmt.Sprintf("Username '%s' not found", username), "/register")
 	}
 	if userInfo.MFAEnabled {
-		return c.Render("mfa-verify", fiber.Map{
+		return c.Render("views/mfa-verify", fiber.Map{
 			"Username": userInfo.Username,
 		})
 	}
 	if userInfo.LoginType == "simple" {
-		return c.Render("simple-login", fiber.Map{
+		return c.Render("views/simple-login", fiber.Map{
 			"Username": userInfo.Username,
 			"UserInfo": userInfo,
 		})
 	}
-	return c.Render("secured-login", fiber.Map{
+	return c.Render("views/secured-login", fiber.Map{
 		"Username": userInfo.Username,
 		"UserInfo": userInfo,
 	})
@@ -928,5 +928,5 @@ func renderErrorPage(c *fiber.Ctx, statusCode int, title, message, description, 
 		RetryURL:    retryURL,
 		ErrorID:     errorID,
 	}
-	return c.Render("error", data)
+	return c.Render("views/error", data)
 }
