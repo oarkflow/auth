@@ -2,18 +2,22 @@ package auth
 
 import (
 	"embed"
+	"html/template"
 	"log"
+	"net/http"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/template/html/v2"
 
 	"github.com/oarkflow/auth/pkg/http/middlewares"
 	"github.com/oarkflow/auth/pkg/http/routes"
 	"github.com/oarkflow/auth/pkg/libs"
 	"github.com/oarkflow/auth/pkg/objects"
 	"github.com/oarkflow/auth/pkg/storage"
+	"github.com/oarkflow/auth/pkg/utils"
 )
 
-//go:embed views
+//go:embed auth
 var Assets embed.FS
 
 type Plugin struct {
@@ -56,6 +60,18 @@ func NewPlugin(prefix string, apps ...*fiber.App) *Plugin {
 	if prefix == "" {
 		prefix = "/"
 	}
+
+	engine := html.NewFileSystem(http.FS(Assets), ".html")
+	engine.Reload(true)
+	engine.AddFuncMap(map[string]any{
+		"unescape": func(s string) template.HTML {
+			return template.HTML(s)
+		},
+		"uris": func() map[string]string {
+			return utils.GetURIs()
+		},
+	})
+	objects.ViewEngine = engine
 	plugin := &Plugin{
 		Prefix: prefix,
 		App:    app,

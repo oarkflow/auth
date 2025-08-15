@@ -2,15 +2,12 @@ package main
 
 import (
 	"fmt"
-	"html/template"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/template/html/v2"
 	"github.com/gookit/color"
 	"github.com/knadh/koanf/parsers/dotenv"
 	"github.com/knadh/koanf/providers/env"
@@ -20,29 +17,14 @@ import (
 	v2 "github.com/oarkflow/auth"
 	"github.com/oarkflow/auth/pkg/config"
 	"github.com/oarkflow/auth/pkg/objects"
-	"github.com/oarkflow/auth/pkg/utils"
 )
 
 func main() {
-	authPlugin := v2.NewPlugin("/")
 	objects.Config = New(".env", true, nil)
 	cfg := config.Config{}
 	cfg.Load()
-	engine := html.NewFileSystem(http.FS(authPlugin.Assets), ".html")
-	engine.Reload(true)
-	engine.AddFuncMap(map[string]any{
-		"unescape": func(s string) template.HTML {
-			return template.HTML(s)
-		},
-		"uris": func() map[string]string {
-			return utils.GetURIs()
-		},
-	})
-	app := fiber.New(fiber.Config{
-		Views:   engine,
-		AppName: objects.Config.GetString("app.name"),
-	})
-	authPlugin.App = app
+	app := fiber.New()
+	authPlugin := v2.NewPlugin("/", app)
 	authPlugin.Register()
 	if err := app.Listen(":3000"); err != nil {
 		log.Fatal(err)
