@@ -12,7 +12,9 @@ func SendError(c *fiber.Ctx, status int, message string) error {
 	contentType := c.Get("Content-Type")
 	if contentType == fiber.MIMEApplicationJSON || contentType == fiber.MIMEApplicationJSONCharsetUTF8 {
 		return c.Status(status).JSON(fiber.Map{
-			"error": message,
+			"success": false,
+			"error":   message,
+			"status":  status,
 		})
 	}
 	return c.Status(status).Redirect("/login")
@@ -45,6 +47,12 @@ func Verify(c *fiber.Ctx) error {
 		return SendError(c, fiber.StatusUnauthorized, "invalid session")
 	}
 	claims := decTok.Claims
+	pubHex, _ := claims["sub"].(string)
+	userInfo, exists := objects.Manager.LookupUserByPubHex(pubHex)
+	if !exists {
+		return SendError(c, fiber.StatusUnauthorized, "user not found")
+	}
+	c.Locals("userInfo", userInfo)
 	c.Locals("user", claims["sub"])
 	c.Locals("claims", claims)
 	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")

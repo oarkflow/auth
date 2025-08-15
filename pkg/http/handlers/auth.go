@@ -31,7 +31,7 @@ const (
 
 func DashboardPage(c *fiber.Ctx) error {
 	pubHex, _ := c.Locals("user").(string)
-	info, _ := objects.Manager.LookupUserByPubHex(pubHex)
+	info, _ := c.Locals("userInfo").(models.UserInfo)
 	return responses.Render(c, "auth/protected", fiber.Map{
 		"PubHex":   pubHex,
 		"DBUserID": info.UserID,
@@ -53,13 +53,7 @@ func LandingPage(c *fiber.Ctx) error {
 
 func UserInfoPage(c *fiber.Ctx) error {
 	pubHex, _ := c.Locals("user").(string)
-	info, exists := objects.Manager.LookupUserByPubHex(pubHex)
-	if !exists {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "user not found",
-		})
-	}
-
+	info, _ := c.Locals("userInfo").(models.UserInfo)
 	// Get public key details
 	pubKeyX, pubKeyY, err := objects.Manager.GetPublicKeyByUserID(info.UserID)
 	if err != nil {
@@ -193,13 +187,7 @@ func ForgotPasswordPage(c *fiber.Ctx) error {
 }
 
 func MFASetupPage(c *fiber.Ctx) error {
-	pubHex, _ := c.Locals("user").(string)
-	userInfo, exists := objects.Manager.LookupUserByPubHex(pubHex)
-	if !exists {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "user not found",
-		})
-	}
+	userInfo, _ := c.Locals("userInfo").(models.UserInfo)
 	// Check if MFA is already enabled
 	mfaEnabled, _ := objects.Manager.Vault().IsUserMFAEnabled(userInfo.UserID)
 	if mfaEnabled {
@@ -243,13 +231,7 @@ func MFAVerifyPage(c *fiber.Ctx) error {
 }
 
 func MFABackupCodesPage(c *fiber.Ctx) error {
-	pubHex, _ := c.Locals("user").(string)
-	userInfo, exists := objects.Manager.LookupUserByPubHex(pubHex)
-	if !exists {
-		return renderErrorPage(c, http.StatusNotFound, "User Not Found",
-			"User information could not be retrieved.",
-			"Please log in again.", "User not found during MFA setup", "/login")
-	}
+	userInfo, _ := c.Locals("userInfo").(models.UserInfo)
 	if !userInfo.MFAEnabled {
 		return renderErrorPage(c, http.StatusBadRequest, "MFA Not Enabled",
 			"Multi-Factor Authentication is not enabled for your account.",
@@ -291,13 +273,7 @@ func OneTimePage(c *fiber.Ctx) error {
 }
 
 func PostMFASetup(c *fiber.Ctx) error {
-	pubHex, _ := c.Locals("user").(string)
-	userInfo, exists := objects.Manager.LookupUserByPubHex(pubHex)
-	if !exists {
-		return renderErrorPage(c, http.StatusNotFound, "User Not Found",
-			"User information could not be retrieved.",
-			"Please log in again.", "User not found during MFA setup", "/login")
-	}
+	userInfo, _ := c.Locals("userInfo").(models.UserInfo)
 	var req requests.MFASetupRequest
 	if err := c.BodyParser(&req); err != nil {
 		return renderErrorPage(c, http.StatusBadRequest, "Verification Code Required",
@@ -425,13 +401,7 @@ func PostMFAVerify(c *fiber.Ctx) error {
 }
 
 func PostMFADisable(c *fiber.Ctx) error {
-	pubHex, _ := c.Locals("user").(string)
-	userInfo, exists := objects.Manager.LookupUserByPubHex(pubHex)
-	if !exists {
-		return renderErrorPage(c, http.StatusNotFound, "User Not Found",
-			"User information could not be retrieved.",
-			"Please log in again.", "User not found during MFA disable", "/login")
-	}
+	userInfo, _ := c.Locals("userInfo").(models.UserInfo)
 	var req requests.MFADisableRequest
 	if err := c.BodyParser(&req); err != nil {
 		return responses.Render(c, "auth/mfa-verify", fiber.Map{
