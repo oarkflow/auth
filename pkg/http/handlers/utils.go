@@ -11,7 +11,9 @@ import (
 // setSessionData stores temporary data in a session cookie (for MFA setup)
 // Note: This is a simple implementation. In production, consider using secure session storage.
 func setSessionData(c *fiber.Ctx, key, value string) {
-	cookie := utils.GetCookie(objects.Manager.Config.EnableHTTPS, objects.Manager.Config.Environment, "temp_"+key, value, 600)
+	enableHTTPS := objects.Config.GetBool("app.https")
+	appEnv := objects.Config.GetString("app.env")
+	cookie := utils.GetCookie(enableHTTPS, appEnv, "temp_"+key, value, 600)
 	c.Cookie(cookie)
 }
 
@@ -26,7 +28,9 @@ func getSessionData(c *fiber.Ctx, key string) (string, bool) {
 
 // clearSessionData removes temporary session data
 func clearSessionData(c *fiber.Ctx, key string) {
-	cookie := utils.GetCookie(objects.Manager.Config.EnableHTTPS, objects.Manager.Config.Environment, "temp_"+key, "", -1)
+	enableHTTPS := objects.Config.GetBool("app.https")
+	appEnv := objects.Config.GetString("app.env")
+	cookie := utils.GetCookie(enableHTTPS, appEnv, "temp_"+key, "", -1)
 	c.Cookie(cookie)
 }
 

@@ -1,7 +1,10 @@
 package objects
 
 import (
-	"github.com/oarkflow/auth/pkg/libs"
+	"github.com/oarkflow/auth/pkg/contracts"
 )
 
-var Manager *libs.Manager
+var (
+	Manager contracts.Manager
+	Config  contracts.Config
+)

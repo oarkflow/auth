@@ -8,7 +8,7 @@ import (
 	"github.com/oarkflow/squealx/drivers/sqlite"
 )
 
-// --- Vault Storage Interface ---
+// --- vault Storage Interface ---
 type VaultStorage interface {
 	SetUserInfo(pubHex string, info UserInfo) error
 	GetUserInfo(pubHex string) (UserInfo, error)
@@ -47,7 +47,7 @@ type VaultStorage interface {
 	RevokeRefreshToken(token string) error
 }
 
-// --- SQLite Vault Storage ---
+// --- SQLite vault Storage ---
 type DatabaseVaultStorage struct {
 	db *squealx.DB
 }

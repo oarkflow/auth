@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oarkflow/auth/pkg/contracts"
 	"github.com/oarkflow/auth/pkg/models"
 )
 
@@ -142,7 +143,7 @@ func PadHex(s string) string {
 	return fmt.Sprintf("%064s", strings.ToLower(s))
 }
 
-func VerifyProofWithReplay(manager *Manager, p *models.SchnorrProof) error {
+func VerifyProofWithReplay(manager contracts.Manager, p *models.SchnorrProof) error {
 	manager.CleanupExpiredNonces()
 	if manager.IsNonceReplayed(p.Nonce) {
 		return fmt.Errorf("nonce replayed")

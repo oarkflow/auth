@@ -7,9 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oarkflow/auth/pkg/config"
+	"github.com/oarkflow/auth/pkg/contracts"
 	"github.com/oarkflow/auth/pkg/models"
-	"github.com/oarkflow/auth/pkg/storage"
 )
 
 const (
@@ -131,8 +130,8 @@ func (s *SecurityManager) ClearLoginAttempts(identifier string) {
 }
 
 type Manager struct {
-	Vault  storage.Storage
-	Config *config.Config
+	vault  contracts.Storage
+	Config *Config
 	// Authentication state
 	UserRegistry      map[string]ecdsa.PublicKey
 	UserRegistryMu    sync.RWMutex
@@ -141,7 +140,7 @@ type Manager struct {
 	LogoutDenylist    map[string]int64
 	LogoutDenylistMu  sync.Mutex
 	Curve             elliptic.Curve
-	UserLogoutTracker *UserLogoutTracker
+	UserLogoutTracker contracts.LogoutTracker
 
 	// Verification storage
 	VerificationTokens map[string]string // username -> token
@@ -153,16 +152,28 @@ type Manager struct {
 	PasswordResetMu     sync.RWMutex
 
 	// Phase 1: Security Manager
-	Security *SecurityManager
+	security contracts.SecurityManager
 }
 
-func NewManager(vaultStorage storage.Storage, configs ...*config.Config) *Manager {
-	var cfg *config.Config
+func (m *Manager) Vault() contracts.Storage {
+	return m.vault
+}
+
+func (m *Manager) Security() contracts.SecurityManager {
+	return m.security
+}
+
+func (m *Manager) LogoutTracker() contracts.LogoutTracker {
+	return m.UserLogoutTracker
+}
+
+func NewManager(vaultStorage contracts.Storage, configs ...*Config) *Manager {
+	var cfg *Config
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
 	return &Manager{
-		Vault:               vaultStorage,
+		vault:               vaultStorage,
 		Config:              cfg,
 		UserLogoutTracker:   NewUserLogoutTracker(),
 		UserRegistry:        make(map[string]ecdsa.PublicKey),
@@ -172,7 +183,7 @@ func NewManager(vaultStorage storage.Storage, configs ...*config.Config) *Manage
 		VerificationTokens:  make(map[string]string),
 		VerificationStatus:  make(map[string]bool),
 		PasswordResetTokens: make(map[string]models.PasswordResetData),
-		Security:            NewSecurityManager(),
+		security:            NewSecurityManager(),
 	}
 }
 
@@ -310,18 +321,18 @@ func (m *Manager) RegisterUserKey(pubHex string, pubKeyX, pubKeyY []byte) {
 }
 
 func (manager *Manager) LookupUserByUsername(username string) (models.UserInfo, bool) {
-	info, err := manager.Vault.GetUserInfoByUsername(username)
+	info, err := manager.vault.GetUserInfoByUsername(username)
 	return info, err == nil
 }
 
 func (manager *Manager) LookupUserByPubHex(pubHex string) (models.UserInfo, bool) {
-	info, err := manager.Vault.GetUserInfo(pubHex)
+	info, err := manager.vault.GetUserInfo(pubHex)
 	return info, err == nil
 }
 
 // Helper to get public key by user info
 func (manager *Manager) GetPublicKeyByUserID(userID string) (string, string, error) {
-	pubKey, err := manager.Vault.GetUserPublicKey(userID)
+	pubKey, err := manager.vault.GetUserPublicKey(userID)
 	if err != nil {
 		return "", "", err
 	}

@@ -360,10 +360,10 @@
         }
     </style>
     <script>
+        const data = JSON.parse('{{.KeyJson}}');
         window.onload = function () {
             // Start download animation
             setTimeout(() => {
-                const data = "{{.KeyJson}}".substring(1, x.length() - 1);
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');

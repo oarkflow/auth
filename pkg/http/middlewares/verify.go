@@ -39,7 +39,8 @@ func Verify(c *fiber.Ctx) error {
 	if objects.Manager.IsTokenDenylisted(tokenStr) {
 		return SendError(c, fiber.StatusUnauthorized, "session expired")
 	}
-	decTok, err := token.DecryptToken(tokenStr, objects.Manager.Config.PasetoSecret)
+	secret := objects.Config.GetString("auth.secret")
+	decTok, err := token.DecryptToken(tokenStr, []byte(secret))
 	if err != nil {
 		return SendError(c, fiber.StatusUnauthorized, "invalid session")
 	}

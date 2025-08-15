@@ -5,42 +5,22 @@ import (
 	"fmt"
 
 	"github.com/oarkflow/squealx"
-	"github.com/oarkflow/squealx/drivers/sqlite"
 
 	"github.com/oarkflow/auth/pkg/models"
 )
 
-// --- Vault Storage Interface ---
-type Storage interface {
-	SetUserInfo(pubHex string, info models.UserInfo) error
-	GetUserInfo(pubHex string) (models.UserInfo, error)
-	GetUserInfoByUsername(username string) (models.UserInfo, error)
-	SetUserSecret(userID, secret string) error
-	GetUserSecret(userID string) (string, error)
-	SetUserPublicKey(userID string, pubKeyX, pubKeyY string) error
-	GetUserPublicKey(userID string) (map[string]string, error)
-	SetUserMFA(userID string, secret string, backupCodes []string) error
-	GetUserMFA(userID string) (string, []string, error)
-	EnableMFA(userID string) error
-	DisableMFA(userID string) error
-	IsUserMFAEnabled(userID string) (bool, error)
-	ValidateBackupCode(userID, code string) error
-	InvalidateBackupCode(userID, code string) error
-}
-
-// --- SQLite Vault Storage ---
+// --- SQLite vault Storage ---
 type DatabaseStorage struct {
 	db *squealx.DB
 }
 
-func NewDatabaseStorage(dbPath string) (*DatabaseStorage, error) {
-	db, err := sqlite.Open(dbPath, "sqlite")
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database connection is nil")
 	}
 
 	// Create tables with improved schema and indexes
-	_, err = db.Exec(`
+	_, err := db.Exec(`
 	CREATE TABLE IF NOT EXISTS users (
 		pub_hex TEXT PRIMARY KEY,
 		username TEXT UNIQUE NOT NULL,

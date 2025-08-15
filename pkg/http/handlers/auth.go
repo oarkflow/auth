@@ -68,7 +68,7 @@ func UserInfoPage(c *fiber.Ctx) error {
 	}
 
 	// Get MFA status
-	mfaEnabled, _ := objects.Manager.Vault.IsUserMFAEnabled(info.UserID)
+	mfaEnabled, _ := objects.Manager.Vault().IsUserMFAEnabled(info.UserID)
 	claims, ok := c.Locals("claims").(map[string]any)
 	if !ok {
 		claims = map[string]any{}
@@ -125,11 +125,11 @@ func VerifyPage(c *fiber.Ctx) error {
 	}
 
 	// Get login type preference
-	loginType, err := objects.Manager.Vault.GetUserSecret(username + "_logintype")
+	loginType, err := objects.Manager.Vault().GetUserSecret(username + "_logintype")
 	if err != nil {
 		loginType = "simple" // default to simple
 	}
-	objects.Manager.Vault.SetUserSecret(username+"_logintype", "") // Remove temp
+	objects.Manager.Vault().SetUserSecret(username+"_logintype", "") // Remove temp
 
 	// Generate key pair after verification
 	pubx, puby, privd := libs.GenerateKeyPair()
@@ -139,19 +139,19 @@ func VerifyPage(c *fiber.Ctx) error {
 		Username:  username,
 		LoginType: loginType,
 	}
-	objects.Manager.Vault.SetUserInfo(pubHex, info)
+	objects.Manager.Vault().SetUserInfo(pubHex, info)
 	// Store public key in credentials table
-	objects.Manager.Vault.SetUserPublicKey(info.UserID, libs.PadHex(pubx), libs.PadHex(puby))
+	objects.Manager.Vault().SetUserPublicKey(info.UserID, libs.PadHex(pubx), libs.PadHex(puby))
 	objects.Manager.RegisterUserKey(pubHex, []byte(pubx), []byte(puby))
 	// Retrieve password hash and move to DBUserID key
-	passwordHash, err := objects.Manager.Vault.GetUserSecret(username)
+	passwordHash, err := objects.Manager.Vault().GetUserSecret(username)
 	if err == nil {
-		objects.Manager.Vault.SetUserSecret(info.UserID, passwordHash)
-		objects.Manager.Vault.SetUserSecret(username, "") // Remove temp
+		objects.Manager.Vault().SetUserSecret(info.UserID, passwordHash)
+		objects.Manager.Vault().SetUserSecret(username, "") // Remove temp
 	}
 	// Retrieve plaintext password for encryption
-	password, err := objects.Manager.Vault.GetUserSecret(username + "_plain")
-	objects.Manager.Vault.SetUserSecret(username+"_plain", "") // Remove temp
+	password, err := objects.Manager.Vault().GetUserSecret(username + "_plain")
+	objects.Manager.Vault().SetUserSecret(username+"_plain", "") // Remove temp
 	if err != nil || password == "" {
 		return renderErrorPage(c, http.StatusInternalServerError, "Account Setup Error",
 			"Failed to complete account setup due to missing password information.",
@@ -200,7 +200,7 @@ func MFASetupPage(c *fiber.Ctx) error {
 		})
 	}
 	// Check if MFA is already enabled
-	mfaEnabled, _ := objects.Manager.Vault.IsUserMFAEnabled(userInfo.UserID)
+	mfaEnabled, _ := objects.Manager.Vault().IsUserMFAEnabled(userInfo.UserID)
 	if mfaEnabled {
 		return renderErrorPage(c, http.StatusBadRequest, "MFA Already Enabled",
 			"Multi-Factor Authentication is already enabled for your account.",
@@ -263,7 +263,7 @@ func MFABackupCodesPage(c *fiber.Ctx) error {
 	}
 
 	// Get current MFA secret
-	secret, _, err := objects.Manager.Vault.GetUserMFA(userInfo.UserID)
+	secret, _, err := objects.Manager.Vault().GetUserMFA(userInfo.UserID)
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "MFA Settings Error",
 			"Failed to retrieve MFA settings.",
@@ -271,7 +271,7 @@ func MFABackupCodesPage(c *fiber.Ctx) error {
 	}
 
 	// Update with new backup codes
-	err = objects.Manager.Vault.SetUserMFA(userInfo.UserID, secret, backupCodes)
+	err = objects.Manager.Vault().SetUserMFA(userInfo.UserID, secret, backupCodes)
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Database Error",
 			"Failed to save new backup codes.",
@@ -328,7 +328,7 @@ func PostMFASetup(c *fiber.Ctx) error {
 	backupCodes := strings.Split(tempBackupCodesStr, ",")
 
 	// Save MFA settings to database
-	err := objects.Manager.Vault.SetUserMFA(userInfo.UserID, tempSecret, backupCodes)
+	err := objects.Manager.Vault().SetUserMFA(userInfo.UserID, tempSecret, backupCodes)
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Database Error",
 			"Failed to save MFA settings.",
@@ -336,7 +336,7 @@ func PostMFASetup(c *fiber.Ctx) error {
 	}
 
 	// Enable MFA for the user
-	err = objects.Manager.Vault.EnableMFA(userInfo.UserID)
+	err = objects.Manager.Vault().EnableMFA(userInfo.UserID)
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "MFA Enable Error",
 			"Failed to enable MFA for your account.",
@@ -379,7 +379,7 @@ func PostMFAVerify(c *fiber.Ctx) error {
 			"Error":    "MFA not enabled for this user",
 		})
 	}
-	secret, backupCodes, err := objects.Manager.Vault.GetUserMFA(userInfo.UserID)
+	secret, backupCodes, err := objects.Manager.Vault().GetUserMFA(userInfo.UserID)
 	if err != nil {
 		return c.Render("mfa-verify", fiber.Map{
 			"Username": username,
@@ -394,7 +394,7 @@ func PostMFAVerify(c *fiber.Ctx) error {
 		for _, backupCode := range backupCodes {
 			if backupCode == formattedCode {
 				isValid = true
-				objects.Manager.Vault.InvalidateBackupCode(userInfo.UserID, formattedCode)
+				objects.Manager.Vault().InvalidateBackupCode(userInfo.UserID, formattedCode)
 				break
 			}
 		}
@@ -402,7 +402,7 @@ func PostMFAVerify(c *fiber.Ctx) error {
 
 	if !isValid {
 		clientIP := utils.GetClientIP(c)
-		objects.Manager.Security.RecordFailedLogin(clientIP)
+		objects.Manager.Security().RecordFailedLogin(clientIP)
 		return c.Render("mfa-verify", fiber.Map{
 			"Username": username,
 			"UserInfo": userInfo,
@@ -446,7 +446,7 @@ func PostMFADisable(c *fiber.Ctx) error {
 	}
 
 	// Verify password
-	storedSecret, err := objects.Manager.Vault.GetUserSecret(userInfo.UserID)
+	storedSecret, err := objects.Manager.Vault().GetUserSecret(userInfo.UserID)
 	if err != nil || !verifyPassword(password, storedSecret) {
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Password",
 			"The password you entered is incorrect.",
@@ -454,7 +454,7 @@ func PostMFADisable(c *fiber.Ctx) error {
 	}
 
 	// Disable MFA
-	err = objects.Manager.Vault.DisableMFA(userInfo.UserID)
+	err = objects.Manager.Vault().DisableMFA(userInfo.UserID)
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "MFA Disable Error",
 			"Failed to disable MFA for your account.",
@@ -580,7 +580,7 @@ func PostRegister(c *fiber.Ctx) error {
 	objects.Manager.SetVerificationToken(username, tokenStr)
 
 	// Store login type preference temporarily
-	objects.Manager.Vault.SetUserSecret(username+"_logintype", loginType)
+	objects.Manager.Vault().SetUserSecret(username+"_logintype", loginType)
 
 	// Securely hash password and store in vault for later use
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -590,9 +590,9 @@ func PostRegister(c *fiber.Ctx) error {
 			"Our system encountered an error while securing your password. Please try again.",
 			fmt.Sprintf("bcrypt hash generation failed: %v", err), "/register")
 	}
-	objects.Manager.Vault.SetUserSecret(username, string(passwordHash))
+	objects.Manager.Vault().SetUserSecret(username, string(passwordHash))
 	// Store password temporarily for verification step
-	objects.Manager.Vault.SetUserSecret(username+"_plain", req.Password)
+	objects.Manager.Vault().SetUserSecret(username+"_plain", req.Password)
 	if utils.IsEmail(username) {
 		utils.SendVerificationEmail(username, tokenStr)
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
@@ -631,7 +631,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 	}
 	clientIP := utils.GetClientIP(c)
 	loginIdentifier := fmt.Sprintf("%s:%s", clientIP, username)
-	if objects.Manager.Security.IsLoginBlocked(loginIdentifier) {
+	if objects.Manager.Security().IsLoginBlocked(loginIdentifier) {
 		return renderErrorPage(c, http.StatusTooManyRequests, "Login Temporarily Blocked",
 			"Too many failed login attempts.",
 			fmt.Sprintf("Please wait %d minutes before trying again.", int(loginCooldownPeriod.Minutes())),
@@ -639,7 +639,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 	}
 	userInfo, hasUser := objects.Manager.LookupUserByUsername(username)
 	if !hasUser {
-		objects.Manager.Security.RecordFailedLogin(loginIdentifier)
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Credentials",
 			"The username or password you entered is incorrect.",
 			"Please check your credentials and try again, or register for a new account.",
@@ -651,22 +651,22 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 			"Please use the secured login option and provide your cryptographic key.",
 			"User account configured for secured login only", "/login")
 	}
-	storedPassword, err := objects.Manager.Vault.GetUserSecret(userInfo.UserID)
+	storedPassword, err := objects.Manager.Vault().GetUserSecret(userInfo.UserID)
 	if err != nil {
-		objects.Manager.Security.RecordFailedLogin(loginIdentifier)
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Credentials",
 			"The username or password you entered is incorrect.",
 			"Please check your credentials and try again, or register for a new account.",
 			"Password hash not found for user", "/login")
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(password)); err != nil {
-		objects.Manager.Security.RecordFailedLogin(loginIdentifier)
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Credentials",
 			"The username or password you entered is incorrect.",
 			"Please check your credentials and try again.",
 			"Password verification failed", "/login")
 	}
-	objects.Manager.Security.ClearLoginAttempts(loginIdentifier)
+	objects.Manager.Security().ClearLoginAttempts(loginIdentifier)
 	// Get public key for token creation
 	pubKeyX, pubKeyY, err := objects.Manager.GetPublicKeyByUserID(userInfo.UserID)
 	if err != nil {
@@ -685,7 +685,9 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 	// Create PASETO token
 	t := token.CreateToken(expDuration, token.AlgEncrypt)
 	_ = token.RegisterClaims(t, claims)
-	tokenStr, err := token.EncryptToken(t, objects.Manager.Config.PasetoSecret)
+
+	secret := objects.Config.GetString("auth.secret")
+	tokenStr, err := token.EncryptToken(t, []byte(secret))
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Login Token Error",
 			"Failed to create authentication token.",
@@ -693,9 +695,12 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 			fmt.Sprintf("PASETO token encryption failed: %v", err), "/login")
 	}
 	if userInfo, exists := objects.Manager.LookupUserByUsername(username); exists {
-		objects.Manager.UserLogoutTracker.ClearUserLogout(userInfo.UserID)
+		objects.Manager.LogoutTracker().ClearUserLogout(userInfo.UserID)
 	}
-	c.Cookie(utils.GetCookie(objects.Manager.Config.EnableHTTPS, objects.Manager.Config.Environment, "session_token", tokenStr))
+	enableHTTPS := objects.Config.GetBool("app.https")
+	appEnv := objects.Config.GetString("app.env")
+	sessionName := objects.Config.GetString("auth.session_name")
+	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr))
 	return c.Redirect(utils.AppURI, fiber.StatusSeeOther)
 }
 
@@ -756,7 +761,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	loginIdentifier := fmt.Sprintf("%s:%s", clientIP, pubHex)
 
 	// Check if login is blocked for this key/IP combination
-	if objects.Manager.Security.IsLoginBlocked(loginIdentifier) {
+	if objects.Manager.Security().IsLoginBlocked(loginIdentifier) {
 		return renderErrorPage(c, http.StatusTooManyRequests, "Login Temporarily Blocked",
 			"Too many failed login attempts.",
 			fmt.Sprintf("Please wait %d minutes before trying again.", int(loginCooldownPeriod.Minutes())),
@@ -766,7 +771,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	info, exists := objects.Manager.LookupUserByPubHex(pubHex)
 	if !exists {
 		// Phase 1: Record failed login attempt
-		objects.Manager.Security.RecordFailedLogin(loginIdentifier)
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Unrecognized Key",
 			"This cryptographic key is not associated with any registered user.",
 			"Please check that you're using the correct key file, or register for a new account.",
@@ -793,17 +798,17 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	storedPubX, storedPubY, err := objects.Manager.GetPublicKeyByUserID(info.UserID)
 	if err != nil || storedPubX != pubx || storedPubY != puby {
 		// Phase 1: Record failed login attempt
-		objects.Manager.Security.RecordFailedLogin(loginIdentifier)
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Key Validation Failed",
 			"The cryptographic key does not match our stored credentials.",
 			"There may be an issue with your key file or account. Please contact support.",
 			"Public key mismatch with stored credentials", "/login")
 	}
 
-	passwordHash, err := objects.Manager.Vault.GetUserSecret(info.UserID)
+	passwordHash, err := objects.Manager.Vault().GetUserSecret(info.UserID)
 	if err != nil {
 		// Phase 1: Record failed login attempt
-		objects.Manager.Security.RecordFailedLogin(loginIdentifier)
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Account Verification Failed",
 			"Could not verify your account password.",
 			"There may be an issue with your account setup. Please contact support.",
@@ -811,7 +816,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
 		// Phase 1: Record failed login attempt
-		objects.Manager.Security.RecordFailedLogin(loginIdentifier)
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Incorrect Password",
 			"The password you entered is incorrect.",
 			"Please check your password and try again. This should be the same password you used during registration.",
@@ -830,7 +835,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	proof := libs.GenerateProof(privD, nonce, ts)
 	if err := libs.VerifyProofWithReplay(objects.Manager, &proof); err != nil {
 		// Phase 1: Record failed login attempt
-		objects.Manager.Security.RecordFailedLogin(loginIdentifier)
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Cryptographic Proof Failed",
 			"The cryptographic proof verification failed.",
 			"There was an issue with the authentication process. Please try again.",
@@ -838,18 +843,23 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	}
 
 	// Phase 1: Clear failed login attempts on successful authentication
-	objects.Manager.Security.ClearLoginAttempts(loginIdentifier)
+	objects.Manager.Security().ClearLoginAttempts(loginIdentifier)
 	claims := utils.GetClaims(pubHex, nonce, ts)
 	t := token.CreateToken(expDuration, token.AlgEncrypt)
 	_ = token.RegisterClaims(t, claims)
-	tokenStr, err := token.EncryptToken(t, objects.Manager.Config.PasetoSecret)
+	secret := objects.Config.GetString("auth.secret")
+	tokenStr, err := token.EncryptToken(t, []byte(secret))
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Token Generation Failed",
 			"Failed to generate authentication token.",
 			"There was an internal error during login. Please try again.",
 			fmt.Sprintf("PASETO token encryption failed: %v", err), "/login")
 	}
-	c.Cookie(utils.GetCookie(objects.Manager.Config.EnableHTTPS, objects.Manager.Config.Environment, "session_token", tokenStr))
+
+	enableHTTPS := objects.Config.GetBool("app.https")
+	appEnv := objects.Config.GetString("app.env")
+	sessionName := objects.Config.GetString("auth.session_name")
+	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr))
 	return c.Redirect(utils.AppURI, fiber.StatusSeeOther)
 }
 
@@ -867,7 +877,8 @@ func PostLogout(c *fiber.Ctx) error {
 			"You don't appear to be logged in. Please log in first if you want to access protected areas.",
 			"No session_token cookie or Authorization header found", "/login")
 	}
-	decTok, err := token.DecryptToken(tokenStr, objects.Manager.Config.PasetoSecret)
+	secret := objects.Config.GetString("auth.secret")
+	decTok, err := token.DecryptToken(tokenStr, []byte(secret))
 	if err != nil {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Authentication Token",
 			"The authentication token could not be processed for logout.",
@@ -890,11 +901,14 @@ func PostLogout(c *fiber.Ctx) error {
 		if userInfo, exists := objects.Manager.LookupUserByPubHex(sub); exists {
 			// Initialize logout tracker if needed
 			// Set user as logged out for proof-based github.com/oarkflow/auth
-			objects.Manager.UserLogoutTracker.SetUserLogout(userInfo.UserID)
+			objects.Manager.LogoutTracker().SetUserLogout(userInfo.UserID)
 		}
 	}
 
-	c.Cookie(utils.GetCookie(objects.Manager.Config.EnableHTTPS, objects.Manager.Config.Environment, "session_token", tokenStr, -1))
+	enableHTTPS := objects.Config.GetBool("app.https")
+	appEnv := objects.Config.GetString("app.env")
+	sessionName := objects.Config.GetString("auth.session_name")
+	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr, -1))
 
 	// Add cache control headers to prevent browser caching
 	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
