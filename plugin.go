@@ -5,12 +5,17 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"embed"
+
 	"github.com/oarkflow/auth/pkg/http/middlewares"
 	"github.com/oarkflow/auth/pkg/http/routes"
 	"github.com/oarkflow/auth/pkg/libs"
 	"github.com/oarkflow/auth/pkg/objects"
 	"github.com/oarkflow/auth/pkg/storage"
 )
+
+//go:embed views
+var Assets embed.FS
 
 type Plugin struct {
 	App        *fiber.App
