@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/oarkflow/auth/pkg/objects"
 	"github.com/oarkflow/auth/pkg/utils"
@@ -35,6 +34,8 @@ func clearSessionData(c *fiber.Ctx, key string) {
 }
 
 // verifyPassword compares plaintext password with bcrypt hash
-func verifyPassword(password, hash string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+func verifyPassword(password, hash string) (bool, error) {
+	hashAlgo := objects.Config.GetString("auth.password_algo")
+	legacyHashAlgo := objects.Config.GetString("auth.legacy_password_algo")
+	return utils.HashCheck(password, hash, hashAlgo, legacyHashAlgo)
 }

@@ -39,6 +39,7 @@ require (
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/oarkflow/date v0.0.4 // indirect
 	github.com/oarkflow/expr v0.0.11 // indirect
+	github.com/oarkflow/hash v0.0.0-20240513110640-a0ad5a00cf25
 	github.com/oarkflow/jet v0.0.4 // indirect
 	github.com/oarkflow/json v0.0.28 // indirect
 	github.com/oarkflow/shamir v0.0.2 // indirect

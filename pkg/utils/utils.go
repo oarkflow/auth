@@ -8,12 +8,15 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
-	"net"
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
+
+	"github.com/oarkflow/hash"
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/pbkdf2"
@@ -23,6 +26,14 @@ const (
 	expDuration       = 15 * time.Minute
 	passwordMinLength = 8
 )
+
+func HashCheck(password, hashStr, algo, legacyAlgo string) (bool, error) {
+	ok, err := hash.Match(password, hashStr, algo)
+	if ok || legacyAlgo == "" {
+		return ok, err
+	}
+	return hash.Match(password, hashStr, legacyAlgo)
+}
 
 // Detect if username is email or phone
 func IsEmail(username string) bool {
@@ -180,100 +191,215 @@ func GetClaims(sub, nonce string, ts int64) map[string]any {
 }
 
 func GetClientIP(c *fiber.Ctx) string {
-	// Check X-Forwarded-For header first
-	if xff := c.Get("X-Forwarded-For"); xff != "" {
-		ips := strings.Split(xff, ",")
-		return strings.TrimSpace(ips[0])
+	if xff := c.Get("X-Forwarded-For"); len(xff) > 0 {
+		if comma := strings.IndexByte(xff, ','); comma > 0 {
+			return strings.TrimSpace(xff[:comma])
+		}
+		return strings.TrimSpace(xff)
 	}
 
-	// Check X-Real-IP header
-	if xri := c.Get("X-Real-IP"); xri != "" {
+	if xri := c.Get("X-Real-IP"); len(xri) > 0 {
 		return strings.TrimSpace(xri)
 	}
 
-	// Fall back to RemoteAddr
-	host, _, err := net.SplitHostPort(c.IP())
-	if err != nil {
-		return c.IP()
+	// c.IP() is already a string; avoid SplitHostPort if no colon
+	ip := c.IP()
+	if i := strings.LastIndexByte(ip, ':'); i != -1 {
+		return ip[:i]
 	}
-	return host
+	return ip
 }
 
 // Phase 1: Password validation functions
 func ValidatePassword(password string) error {
 	if len(password) < passwordMinLength {
-		return fmt.Errorf("password must be at least %d characters long", passwordMinLength)
+		return fmt.Errorf("password must be at least %d characters", passwordMinLength)
 	}
 
-	hasUpper := false
-	hasLower := false
-	hasDigit := false
-	hasSpecial := false
+	hasUpper, hasLower, hasDigit, hasSpecial := false, false, false, false
 
-	for _, char := range password {
+	for _, c := range password {
 		switch {
-		case 'A' <= char && char <= 'Z':
+		case 'A' <= c && c <= 'Z':
 			hasUpper = true
-		case 'a' <= char && char <= 'z':
+		case 'a' <= c && c <= 'z':
 			hasLower = true
-		case '0' <= char && char <= '9':
+		case '0' <= c && c <= '9':
 			hasDigit = true
-		case strings.ContainsRune("!@#$%^&*()_+-=[]{}|;:,.<>?", char):
+		case isSpecialChar(c):
 			hasSpecial = true
+		}
+
+		// Early exit if all found
+		if hasUpper && hasLower && hasDigit && hasSpecial {
+			return nil
 		}
 	}
 
 	if !hasUpper {
-		return fmt.Errorf("password must contain at least one uppercase letter")
+		return errors.New("must contain uppercase letter")
 	}
 	if !hasLower {
-		return fmt.Errorf("password must contain at least one lowercase letter")
+		return errors.New("must contain lowercase letter")
 	}
 	if !hasDigit {
-		return fmt.Errorf("password must contain at least one digit")
+		return errors.New("must contain digit")
 	}
 	if !hasSpecial {
-		return fmt.Errorf("password must contain at least one special character")
+		return errors.New("must contain special character")
 	}
-
 	return nil
+}
+
+func isSpecialChar(c rune) bool {
+	switch c {
+	case '!', '@', '#', '$', '%', '^', '&', '*', '(', ')',
+		'_', '+', '-', '=', '[', ']', '{', '}', '|',
+		';', ':', ',', '.', '<', '>', '?':
+		return true
+	}
+	return false
 }
 
 func SanitizeInput(input string) string {
-	// Remove potentially dangerous characters and normalize
 	input = strings.TrimSpace(input)
-	input = strings.ReplaceAll(input, "<", "&lt;")
-	input = strings.ReplaceAll(input, ">", "&gt;")
-	input = strings.ReplaceAll(input, "\"", "&quot;")
-	input = strings.ReplaceAll(input, "'", "&#39;")
-	return input
+	if input == "" {
+		return ""
+	}
+
+	// Manual replacement in a single pass (faster than ReplaceAll chain)
+	var b strings.Builder
+	b.Grow(len(input))
+	for _, r := range input {
+		switch r {
+		case '<':
+			b.WriteString("&lt;")
+		case '>':
+			b.WriteString("&gt;")
+		case '"':
+			b.WriteString("&quot;")
+		case '\'':
+			b.WriteString("&#39;")
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
+// ValidateEmail checks format and constraints without regex or allocations.
 func ValidateEmail(email string) error {
-	email = strings.TrimSpace(strings.ToLower(email))
-	if len(email) == 0 {
-		return fmt.Errorf("email cannot be empty")
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return errors.New("email cannot be empty")
 	}
 	if len(email) > 254 {
-		return fmt.Errorf("email too long")
+		return errors.New("email too long")
 	}
 
-	re := regexp.MustCompile(`^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$`)
-	if !re.MatchString(email) {
-		return fmt.Errorf("invalid email format")
+	state := 0 // 0 = local, 1 = domain
+	localLen := 0
+	labelLen := 0
+	tldLen := 0
+	labelCount := 0
+	hasAt := false
+
+	for i := 0; i < len(email); i++ {
+		c := email[i]
+
+		if state == 0 { // local part
+			if c == '@' {
+				if localLen == 0 || i == len(email)-1 {
+					return errors.New("invalid email: missing local or domain")
+				}
+				if localLen > 64 {
+					return errors.New("local part too long")
+				}
+				state = 1
+				hasAt = true
+				continue
+			}
+			if !(isAlphaNum(c) || c == '.' || c == '_' || c == '%' || c == '+' || c == '-') {
+				return errors.New("invalid character in local part")
+			}
+			localLen++
+		} else { // domain part
+			if c == '.' {
+				if labelLen == 0 {
+					return errors.New("invalid domain: empty label")
+				}
+				labelCount++
+				tldLen = labelLen
+				labelLen = 0
+				continue
+			}
+			if !(isAlphaNum(c) || c == '-') {
+				return errors.New("invalid character in domain")
+			}
+			labelLen++
+			if labelLen > 63 {
+				return errors.New("domain label too long")
+			}
+		}
 	}
+
+	if !hasAt {
+		return errors.New("missing @ symbol")
+	}
+	if labelLen == 0 {
+		return errors.New("invalid domain: empty last label")
+	}
+	tldLen = labelLen
+	labelCount++
+
+	if labelCount < 2 {
+		return errors.New("missing TLD")
+	}
+	if tldLen < 2 || tldLen > 63 {
+		return errors.New("invalid TLD length")
+	}
+
 	return nil
 }
 
+// ValidatePhone checks phone format without regex or allocations (E.164-like)
 func ValidatePhone(phone string) error {
 	phone = strings.TrimSpace(phone)
-	if len(phone) == 0 {
-		return fmt.Errorf("phone cannot be empty")
+	if phone == "" {
+		return errors.New("phone cannot be empty")
 	}
 
-	re := regexp.MustCompile(`^\+?[1-9]\d{1,14}$`)
-	if !re.MatchString(phone) {
-		return fmt.Errorf("invalid phone format")
+	digitCount := 0
+	firstDigitSeen := false
+
+	for i, r := range phone {
+		if unicode.IsDigit(r) {
+			digitCount++
+			if !firstDigitSeen {
+				if r == '0' {
+					return errors.New("phone cannot start with 0")
+				}
+				firstDigitSeen = true
+			}
+		} else if r == '+' {
+			if i != 0 {
+				return errors.New("'+' must be at start")
+			}
+		} else if r != ' ' && r != '-' && r != '(' && r != ')' {
+			return errors.New("invalid character in phone number")
+		}
 	}
+
+	if digitCount < 1 || digitCount > 15 {
+		return errors.New("invalid phone length")
+	}
+
 	return nil
+}
+
+// Helpers
+func isAlphaNum(c byte) bool {
+	return (c >= 'A' && c <= 'Z') ||
+		(c >= 'a' && c <= 'z') ||
+		(c >= '0' && c <= '9')
 }

@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/oarkflow/hash"
 	"github.com/oarkflow/paseto/token"
 	"github.com/oarkflow/xid/wuid"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/oarkflow/auth/pkg/http/requests"
 	"github.com/oarkflow/auth/pkg/http/responses"
@@ -448,10 +448,16 @@ func PostMFADisable(c *fiber.Ctx) error {
 
 	// Verify password
 	storedSecret, err := objects.Manager.Vault().GetUserSecret(userInfo.UserID)
-	if err != nil || !verifyPassword(password, storedSecret) {
+	if err != nil {
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Password",
 			"The password you entered is incorrect.",
-			"Please try again.", "", "/protected")
+			"Please try again.", "", "/login")
+	}
+	ok, err := verifyPassword(password, storedSecret)
+	if !ok || err != nil {
+		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Password",
+			"The password you entered is incorrect.",
+			"Please try again.", "", "/login")
 	}
 
 	// Disable MFA
@@ -583,8 +589,7 @@ func PostRegister(c *fiber.Ctx) error {
 	// Store login type preference temporarily
 	objects.Manager.Vault().SetUserSecret(username+"_logintype", loginType)
 
-	// Securely hash password and store in vault for later use
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	passwordHash, err := hash.Make(req.Password, objects.Config.GetString("auth.password_algo"))
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Password Processing Error",
 			"Failed to securely process your password.",
@@ -660,7 +665,9 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 			"Please check your credentials and try again, or register for a new account.",
 			"Password hash not found for user", "/login")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(password)); err != nil {
+
+	ok, err := verifyPassword(password, storedPassword)
+	if err != nil || !ok {
 		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Credentials",
 			"The username or password you entered is incorrect.",
@@ -815,8 +822,9 @@ func PostSecureLogin(c *fiber.Ctx) error {
 			"There may be an issue with your account setup. Please contact support.",
 			fmt.Sprintf("Password hash retrieval failed: %v", err), "/login")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
-		// Phase 1: Record failed login attempt
+
+	ok, err := verifyPassword(password, passwordHash)
+	if err != nil || !ok {
 		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
 		return renderErrorPage(c, http.StatusUnauthorized, "Incorrect Password",
 			"The password you entered is incorrect.",

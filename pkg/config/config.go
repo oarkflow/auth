@@ -16,9 +16,11 @@ func (a *Config) Load() {
 	objects.Config.Add("app.env", "development")
 	objects.Config.Add("app.https", false)
 	objects.Config.Add(a.Prefix(), map[string]any{
-		"secret":          objects.Config.Env("AUTH_SECRET", "OdR4DlWhZk6osDd0qXLdVT88lHOvj14L"),
-		"session_name":    objects.Config.Env("AUTH_SESSION_NAME", "session_token"),
-		"session_timeout": objects.Config.Env("AUTH_SESSION_TIMEOUT", "24h"),
+		"password_algo":        objects.Config.Env("PW_HASH_ALGO", "argon2id"),
+		"legacy_password_algo": objects.Config.Env("LEGACY_PW_HASH_ALGO", "bcrypt"),
+		"secret":               objects.Config.Env("AUTH_SECRET", "OdR4DlWhZk6osDd0qXLdVT88lHOvj14L"),
+		"session_name":         objects.Config.Env("AUTH_SESSION_NAME", "session_token"),
+		"session_timeout":      objects.Config.Env("AUTH_SESSION_TIMEOUT", "24h"),
 
 		"proof_timeout": objects.Config.Env("AUTH_PROOF_TIMEOUT", "5m"),
 
