@@ -252,17 +252,28 @@ func PostForgotPassword(c *fiber.Ctx) error {
 			"Our system encountered an error while processing your registration. Please try again.",
 			fmt.Sprintf("Random token generation failed: %v", err), utils.RegisterURI)
 	}
+	manager, ok := objects.Manager.(*libs.Manager)
+	emailSender := utils.SendPasswordResetEmail
+	smsSender := utils.SendPasswordResetSMS
+	if ok {
+		if manager.SendNotification.SendPasswordResetEmail != nil {
+			emailSender = manager.SendNotification.SendPasswordResetEmail
+		}
+		if manager.SendNotification.SendPasswordResetSMS != nil {
+			smsSender = manager.SendNotification.SendPasswordResetSMS
+		}
+	}
 	tokenStr := hex.EncodeToString(tokenBytes)
 	objects.Manager.SetPasswordResetToken(username, tokenStr)
 	if utils.IsPhone(username) {
-		utils.SendPasswordResetSMS(c, username, tokenStr)
+		smsSender(c, username, tokenStr)
 		return responses.Render(c, utils.ForgotPasswordTemplate, fiber.Map{
 			"Title":   "Password Reset Requested",
 			"Message": "Password Reset Requested. Please check your phone for verification.",
 			"Contact": username,
 		})
 	}
-	utils.SendPasswordResetEmail(c, username, tokenStr)
+	emailSender(c, username, tokenStr)
 	return responses.Render(c, utils.ForgotPasswordTemplate, fiber.Map{
 		"Success": true,
 		"Title":   "Password Reset Requested",

@@ -21,9 +21,10 @@ import (
 var Assets embed.FS
 
 type Plugin struct {
-	App    *fiber.App
-	Prefix string
-	Assets embed.FS
+	App              *fiber.App
+	Prefix           string
+	Assets           embed.FS
+	SendNotification libs.NotificationHandler
 }
 
 func (p *Plugin) Register() {
@@ -32,7 +33,9 @@ func (p *Plugin) Register() {
 	if err != nil {
 		log.Fatalf("Failed to initialize DatabaseVaultStorage: %v", err)
 	}
-	objects.Manager = libs.NewManager(vault, cfg)
+	manager := libs.NewManager(vault, cfg)
+	manager.SendNotification = p.SendNotification
+	objects.Manager = manager
 	routes.Setup(p.Prefix, p.App)
 	routes.ProtectedRoutes(p.App.Group(p.Prefix, middlewares.Verify))
 }
@@ -52,7 +55,7 @@ func (p *Plugin) Close() error {
 	return nil
 }
 
-func NewPlugin(prefix string, apps ...*fiber.App) *Plugin {
+func NewPlugin(prefix string, notificationHandler libs.NotificationHandler, apps ...*fiber.App) *Plugin {
 	var app *fiber.App
 	if len(apps) > 0 {
 		app = apps[0]
@@ -73,9 +76,10 @@ func NewPlugin(prefix string, apps ...*fiber.App) *Plugin {
 	})
 	objects.ViewEngine = engine
 	plugin := &Plugin{
-		Prefix: prefix,
-		App:    app,
-		Assets: Assets,
+		Prefix:           prefix,
+		App:              app,
+		Assets:           Assets,
+		SendNotification: notificationHandler,
 	}
 	return plugin
 }

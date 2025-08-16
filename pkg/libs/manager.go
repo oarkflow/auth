@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/oarkflow/auth/pkg/contracts"
 	"github.com/oarkflow/auth/pkg/models"
 )
@@ -153,6 +154,8 @@ type Manager struct {
 
 	// Phase 1: Security Manager
 	security contracts.SecurityManager
+
+	SendNotification NotificationHandler
 }
 
 func (m *Manager) Vault() contracts.Storage {
@@ -337,4 +340,13 @@ func (manager *Manager) GetPublicKeyByUserID(userID int64) (string, string, erro
 		return "", "", err
 	}
 	return pubKey["PubKeyX"], pubKey["PubKeyY"], nil
+}
+
+type NotificationCallback func(*fiber.Ctx, string, string) error
+
+type NotificationHandler struct {
+	SendVerificationEmail  NotificationCallback
+	SendVerificationSMS    NotificationCallback
+	SendPasswordResetEmail NotificationCallback
+	SendPasswordResetSMS   NotificationCallback
 }

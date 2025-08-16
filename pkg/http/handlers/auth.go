@@ -304,16 +304,27 @@ func PostRegister(c *fiber.Ctx) error {
 			"Our system encountered an error while saving your registration. Please try again.",
 			fmt.Sprintf("Pending registration storage failed: %v", err), utils.RegisterURI)
 	}
-
+	manager, ok := objects.Manager.(*libs.Manager)
+	emailSender := utils.SendVerificationEmail
+	smsSender := utils.SendVerificationSMS
+	if ok {
+		if manager.SendNotification.SendVerificationEmail != nil {
+			emailSender = manager.SendNotification.SendVerificationEmail
+		}
+		if manager.SendNotification.SendVerificationSMS != nil {
+			smsSender = manager.SendNotification.SendVerificationSMS
+		}
+	}
 	if utils.IsPhone(username) {
-		utils.SendVerificationSMS(c, username, tokenStr)
+
+		smsSender(c, username, tokenStr)
 		return responses.Render(c, utils.VerificationSentTemplate, fiber.Map{
 			"Title":   "Verification Sent",
 			"Message": "Registered. Please check your phone for verification.",
 			"Contact": username,
 		})
 	}
-	utils.SendVerificationEmail(c, username, tokenStr)
+	emailSender(c, username, tokenStr)
 	return responses.Render(c, utils.VerificationSentTemplate, fiber.Map{
 		"Title":   "Verification Sent",
 		"Message": "Registered. Please check your email for verification.",

@@ -16,6 +16,7 @@ import (
 
 	v2 "github.com/oarkflow/auth"
 	"github.com/oarkflow/auth/pkg/config"
+	"github.com/oarkflow/auth/pkg/libs"
 	"github.com/oarkflow/auth/pkg/objects"
 )
 
@@ -24,7 +25,7 @@ func main() {
 	cfg := config.Config{}
 	cfg.Load()
 	app := fiber.New()
-	authPlugin := v2.NewPlugin("/", app)
+	authPlugin := v2.NewPlugin("/", libs.NotificationHandler{}, app)
 	authPlugin.Register()
 	if err := app.Listen(":3000"); err != nil {
 		log.Fatal(err)
