@@ -25,7 +25,7 @@ func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
 	CREATE TABLE IF NOT EXISTS users (
 		pub_hex TEXT PRIMARY KEY,
 		username TEXT UNIQUE NOT NULL,
-		user_id TEXT NOT NULL,
+		user_id INTEGER NOT NULL, -- changed from TEXT to INTEGER
 		login_type TEXT DEFAULT 'simple' CHECK (login_type IN ('simple', 'secured')),
 		mfa_enabled BOOLEAN DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -36,7 +36,7 @@ func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
 	);
 
 	CREATE TABLE IF NOT EXISTS credentials (
-		user_id TEXT NOT NULL,
+		user_id INTEGER NOT NULL, -- changed from TEXT to INTEGER
 		secret TEXT NOT NULL,
 		metadata TEXT,
 		secret_type TEXT DEFAULT 'password' NOT NULL,
@@ -44,52 +44,6 @@ func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (user_id, secret_type)
-	);
-
-	-- Central Authentication System tables
-	CREATE TABLE IF NOT EXISTS clients (
-		client_id TEXT PRIMARY KEY,
-		client_secret TEXT NOT NULL,
-		name TEXT NOT NULL,
-		redirect_uris TEXT NOT NULL, -- JSON array
-		scopes TEXT NOT NULL, -- JSON array
-		is_approved BOOLEAN DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS authorization_codes (
-		code TEXT PRIMARY KEY,
-		client_id TEXT NOT NULL,
-		user_id TEXT NOT NULL,
-		redirect_uri TEXT NOT NULL,
-		scopes TEXT NOT NULL, -- JSON array
-		expires_at DATETIME NOT NULL,
-		used BOOLEAN DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (client_id) REFERENCES clients (client_id),
-		FOREIGN KEY (user_id) REFERENCES users (user_id)
-	);
-
-	CREATE TABLE IF NOT EXISTS access_tokens (
-		token TEXT PRIMARY KEY,
-		client_id TEXT NOT NULL,
-		user_id TEXT NOT NULL,
-		scopes TEXT NOT NULL, -- JSON array
-		expires_at DATETIME NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (client_id) REFERENCES clients (client_id),
-		FOREIGN KEY (user_id) REFERENCES users (user_id)
-	);
-
-	CREATE TABLE IF NOT EXISTS refresh_tokens (
-		token TEXT PRIMARY KEY,
-		client_id TEXT NOT NULL,
-		user_id TEXT NOT NULL,
-		expires_at DATETIME NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (client_id) REFERENCES clients (client_id),
-		FOREIGN KEY (user_id) REFERENCES users (user_id)
 	);
 
 	CREATE TABLE IF NOT EXISTS verification_tokens (
@@ -116,13 +70,6 @@ func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
 	CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
 	CREATE INDEX IF NOT EXISTS idx_credentials_user_id ON credentials(user_id);
 	CREATE INDEX IF NOT EXISTS idx_credentials_secret_type ON credentials(secret_type);
-	CREATE INDEX IF NOT EXISTS idx_clients_created_at ON clients(created_at);
-	CREATE INDEX IF NOT EXISTS idx_authorization_codes_client_id ON authorization_codes(client_id);
-	CREATE INDEX IF NOT EXISTS idx_authorization_codes_user_id ON authorization_codes(user_id);
-	CREATE INDEX IF NOT EXISTS idx_authorization_codes_expires_at ON authorization_codes(expires_at);
-	CREATE INDEX IF NOT EXISTS idx_access_tokens_client_id ON access_tokens(client_id);
-	CREATE INDEX IF NOT EXISTS idx_access_tokens_user_id ON access_tokens(user_id);
-	CREATE INDEX IF NOT EXISTS idx_refresh_tokens_client_id ON refresh_tokens(client_id);
 	CREATE INDEX IF NOT EXISTS idx_verification_tokens_username ON verification_tokens(username);
 	CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token);
 	CREATE INDEX IF NOT EXISTS idx_pending_registrations_username ON pending_registrations(username);
@@ -218,12 +165,12 @@ func (v *DatabaseStorage) GetUserInfoByUsername(username string) (models.UserInf
 	return info, nil
 }
 
-func (v *DatabaseStorage) SetUserSecret(userID, secret string) error {
+func (v *DatabaseStorage) SetUserSecret(userID int64, secret string) error {
 	_, err := v.db.Exec(`INSERT OR REPLACE INTO credentials (user_id, secret, secret_type) VALUES (?, ?, 'password')`, userID, secret)
 	return err
 }
 
-func (v *DatabaseStorage) GetUserSecret(userID string) (string, error) {
+func (v *DatabaseStorage) GetUserSecret(userID int64) (string, error) {
 	var secret string
 	err := v.db.Get(&secret, `SELECT secret FROM credentials WHERE user_id = ? AND secret_type = 'password'`, userID)
 	if err != nil {
@@ -232,8 +179,7 @@ func (v *DatabaseStorage) GetUserSecret(userID string) (string, error) {
 	return secret, nil
 }
 
-// New methods for public key storage
-func (v *DatabaseStorage) SetUserPublicKey(userID string, pubKeyX, pubKeyY string) error {
+func (v *DatabaseStorage) SetUserPublicKey(userID int64, pubKeyX, pubKeyY string) error {
 	pubKeyJSON, _ := json.Marshal(map[string]string{
 		"PubKeyX": pubKeyX,
 		"PubKeyY": pubKeyY,
@@ -242,7 +188,7 @@ func (v *DatabaseStorage) SetUserPublicKey(userID string, pubKeyX, pubKeyY strin
 	return err
 }
 
-func (v *DatabaseStorage) GetUserPublicKey(userID string) (map[string]string, error) {
+func (v *DatabaseStorage) GetUserPublicKey(userID int64) (map[string]string, error) {
 	var secret string
 	err := v.db.Get(&secret, `SELECT secret FROM credentials WHERE user_id = ? AND secret_type = 'public_key'`, userID)
 	if err != nil {
@@ -255,14 +201,13 @@ func (v *DatabaseStorage) GetUserPublicKey(userID string) (map[string]string, er
 	return pubKey, nil
 }
 
-// MFA methods implementation
-func (v *DatabaseStorage) SetUserMFA(userID string, secret string, backupCodes []string) error {
+func (v *DatabaseStorage) SetUserMFA(userID int64, secret string, backupCodes []string) error {
 	backupCodesJSON, _ := json.Marshal(backupCodes)
 	_, err := v.db.Exec(`INSERT OR REPLACE INTO credentials (user_id, secret, secret_type, metadata) VALUES (?, ?, 'mfa', ?)`, userID, secret, string(backupCodesJSON))
 	return err
 }
 
-func (v *DatabaseStorage) GetUserMFA(userID string) (string, []string, error) {
+func (v *DatabaseStorage) GetUserMFA(userID int64) (string, []string, error) {
 	var secret, metadata string
 	err := v.db.QueryRow(`SELECT secret, metadata FROM credentials WHERE user_id = ? AND secret_type = 'mfa'`, userID).Scan(&secret, &metadata)
 	if err != nil {
@@ -275,17 +220,17 @@ func (v *DatabaseStorage) GetUserMFA(userID string) (string, []string, error) {
 	return secret, backupCodes, nil
 }
 
-func (v *DatabaseStorage) EnableMFA(userID string) error {
+func (v *DatabaseStorage) EnableMFA(userID int64) error {
 	_, err := v.db.Exec(`UPDATE users SET mfa_enabled = 1 WHERE user_id = ?`, userID)
 	return err
 }
 
-func (v *DatabaseStorage) DisableMFA(userID string) error {
+func (v *DatabaseStorage) DisableMFA(userID int64) error {
 	_, err := v.db.Exec(`UPDATE users SET mfa_enabled = 0 WHERE user_id = ?`, userID)
 	return err
 }
 
-func (v *DatabaseStorage) IsUserMFAEnabled(userID string) (bool, error) {
+func (v *DatabaseStorage) IsUserMFAEnabled(userID int64) (bool, error) {
 	var mfaEnabled bool
 	err := v.db.QueryRow(`SELECT mfa_enabled FROM users WHERE user_id = ?`, userID).Scan(&mfaEnabled)
 	if err != nil {
@@ -294,7 +239,7 @@ func (v *DatabaseStorage) IsUserMFAEnabled(userID string) (bool, error) {
 	return mfaEnabled, nil
 }
 
-func (v *DatabaseStorage) ValidateBackupCode(userID, code string) error {
+func (v *DatabaseStorage) ValidateBackupCode(userID int64, code string) error {
 	secret, backupCodes, err := v.GetUserMFA(userID)
 	if err != nil {
 		return err
@@ -319,6 +264,6 @@ func (v *DatabaseStorage) ValidateBackupCode(userID, code string) error {
 	return v.SetUserMFA(userID, secret, newBackupCodes)
 }
 
-func (v *DatabaseStorage) InvalidateBackupCode(userID, code string) error {
+func (v *DatabaseStorage) InvalidateBackupCode(userID int64, code string) error {
 	return v.ValidateBackupCode(userID, code) // Same logic
 }

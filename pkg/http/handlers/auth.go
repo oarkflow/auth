@@ -134,7 +134,7 @@ func VerifyPage(c *fiber.Ctx) error {
 	pubx, puby, privd := libs.GenerateKeyPair()
 	pubHex := libs.PadHex(pubx) + ":" + libs.PadHex(puby)
 	info := models.UserInfo{
-		UserID:    wuid.New().String(),
+		UserID:    wuid.New().Int64(),
 		Username:  username,
 		LoginType: loginType,
 	}

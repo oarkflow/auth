@@ -331,7 +331,7 @@ func (manager *Manager) LookupUserByPubHex(pubHex string) (models.UserInfo, bool
 }
 
 // Helper to get public key by user info
-func (manager *Manager) GetPublicKeyByUserID(userID string) (string, string, error) {
+func (manager *Manager) GetPublicKeyByUserID(userID int64) (string, string, error) {
 	pubKey, err := manager.vault.GetUserPublicKey(userID)
 	if err != nil {
 		return "", "", err

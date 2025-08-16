@@ -27,14 +27,14 @@ type Manager interface {
 	RegisterUserKey(pubHex string, pubKeyX, pubKeyY []byte)
 	LookupUserByUsername(username string) (models.UserInfo, bool)
 	LookupUserByPubHex(pubHex string) (models.UserInfo, bool)
-	GetPublicKeyByUserID(userID string) (string, string, error)
+	GetPublicKeyByUserID(userID int64) (string, string, error)
 	Vault() Storage
 	Security() SecurityManager
 	LogoutTracker() LogoutTracker
 }
 
 type LogoutTracker interface {
-	SetUserLogout(userID string)
-	IsUserLoggedOut(userID string, authTimestamp int64) bool
-	ClearUserLogout(userID string)
+	SetUserLogout(userID int64)
+	IsUserLoggedOut(userID int64, authTimestamp int64) bool
+	ClearUserLogout(userID int64)
 }

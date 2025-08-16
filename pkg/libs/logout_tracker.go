@@ -7,23 +7,23 @@ import (
 
 // Track user logout timestamps for proof-based github.com/oarkflow/auth security
 type UserLogoutTracker struct {
-	logoutTimes map[string]int64 // userID -> logout timestamp
+	logoutTimes map[int64]int64 // userID -> logout timestamp
 	mu          sync.RWMutex
 }
 
 func NewUserLogoutTracker() *UserLogoutTracker {
 	return &UserLogoutTracker{
-		logoutTimes: make(map[string]int64),
+		logoutTimes: make(map[int64]int64),
 	}
 }
 
-func (ult *UserLogoutTracker) SetUserLogout(userID string) {
+func (ult *UserLogoutTracker) SetUserLogout(userID int64) {
 	ult.mu.Lock()
 	defer ult.mu.Unlock()
 	ult.logoutTimes[userID] = time.Now().Unix()
 }
 
-func (ult *UserLogoutTracker) IsUserLoggedOut(userID string, authTimestamp int64) bool {
+func (ult *UserLogoutTracker) IsUserLoggedOut(userID int64, authTimestamp int64) bool {
 	ult.mu.RLock()
 	defer ult.mu.RUnlock()
 
@@ -36,7 +36,7 @@ func (ult *UserLogoutTracker) IsUserLoggedOut(userID string, authTimestamp int64
 	return authTimestamp < logoutTime
 }
 
-func (ult *UserLogoutTracker) ClearUserLogout(userID string) {
+func (ult *UserLogoutTracker) ClearUserLogout(userID int64) {
 	ult.mu.Lock()
 	defer ult.mu.Unlock()
 	delete(ult.logoutTimes, userID)
