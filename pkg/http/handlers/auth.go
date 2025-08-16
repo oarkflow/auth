@@ -32,7 +32,7 @@ const (
 func DashboardPage(c *fiber.Ctx) error {
 	pubHex, _ := c.Locals("user").(string)
 	info, _ := c.Locals("userInfo").(models.UserInfo)
-	return responses.Render(c, "auth/protected", fiber.Map{
+	return responses.Render(c, utils.AppTemplate, fiber.Map{
 		"PubHex":   pubHex,
 		"DBUserID": info.UserID,
 		"Username": info.Username,
@@ -46,7 +46,7 @@ func HealthCheck(c *fiber.Ctx) error {
 }
 
 func LandingPage(c *fiber.Ctx) error {
-	return responses.Render(c, "auth/index", fiber.Map{
+	return responses.Render(c, utils.LandingTemplate, fiber.Map{
 		"Title": "Welcome to the Auth Service",
 	})
 }
@@ -91,7 +91,7 @@ func UserInfoPage(c *fiber.Ctx) error {
 }
 
 func LogoutPage(c *fiber.Ctx) error {
-	return responses.Render(c, "auth/logout", fiber.Map{
+	return responses.Render(c, utils.LogoutTemplate, fiber.Map{
 		"Title": "Logout page",
 	})
 }
@@ -102,7 +102,7 @@ func VerifyPage(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Form Data",
 			"The verification form data could not be processed.",
 			"Please check your input and try again.",
-			fmt.Sprintf("ParseForm error: %v", err), "/register")
+			fmt.Sprintf("ParseForm error: %v", err), utils.RegisterURI)
 	}
 	username := req.Username
 	token := req.Token
@@ -110,7 +110,7 @@ func VerifyPage(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Verification Link",
 			"The verification link is missing required parameters.",
 			"Please check that you clicked the complete link from your email or SMS, or try registering again.",
-			"Missing username or token in verification URL", "/register")
+			"Missing username or token in verification URL", utils.RegisterURI)
 	}
 	// Use verification token table
 	ok, err := objects.Manager.Vault().VerifyToken(username, token)
@@ -118,7 +118,7 @@ func VerifyPage(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Verification",
 			"This verification link is either invalid or has already been used.",
 			"The link may have expired or been used already. Please try registering again to get a new verification link.",
-			"Verification token does not match or does not exist", "/register")
+			"Verification token does not match or does not exist", utils.RegisterURI)
 	}
 
 	// Retrieve pending registration data
@@ -127,7 +127,7 @@ func VerifyPage(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusInternalServerError, "Account Setup Error",
 			"Failed to complete account setup due to missing registration information.",
 			"There was an issue finalizing your account. Please try registering again.",
-			"Pending registration not found during verification", "/register")
+			"Pending registration not found during verification", utils.RegisterURI)
 	}
 
 	// Generate key pair after verification
@@ -152,25 +152,25 @@ func VerifyPage(c *fiber.Ctx) error {
 		"EncryptedPrivateKeyD": encPrivD,
 	}
 	jsonData, _ := json.Marshal(keyData)
-	return responses.Render(c, "auth/download-key-file", fiber.Map{
+	return responses.Render(c, utils.DownloadKeyTemplate, fiber.Map{
 		"KeyJson": template.JS(jsonData),
 	})
 }
 
 func LoginPage(c *fiber.Ctx) error {
-	return responses.Render(c, "auth/login", fiber.Map{
+	return responses.Render(c, utils.LoginTemplate, fiber.Map{
 		"Title": "Login",
 	})
 }
 
 func RegisterPage(c *fiber.Ctx) error {
-	return responses.Render(c, "auth/register", fiber.Map{
+	return responses.Render(c, utils.RegisterTemplate, fiber.Map{
 		"Title": "Register",
 	})
 }
 
 func ForgotPasswordPage(c *fiber.Ctx) error {
-	return responses.Render(c, "auth/forgot-password", fiber.Map{
+	return responses.Render(c, utils.ForgotPasswordTemplate, fiber.Map{
 		"Title": "Forgot Password",
 	})
 }
@@ -182,7 +182,7 @@ func MFASetupPage(c *fiber.Ctx) error {
 	if mfaEnabled {
 		return renderErrorPage(c, http.StatusBadRequest, "MFA Already Enabled",
 			"Multi-Factor Authentication is already enabled for your account.",
-			"You can disable MFA first if you want to set it up again.", "", "/protected")
+			"You can disable MFA first if you want to set it up again.", "", utils.AppURI)
 	}
 
 	// Generate new MFA secret and QR code
@@ -190,7 +190,7 @@ func MFASetupPage(c *fiber.Ctx) error {
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "MFA Setup Error",
 			"Failed to generate MFA credentials.",
-			"Please try again later.", fmt.Sprintf("MFA generation error: %v", err), "/protected")
+			"Please try again later.", fmt.Sprintf("MFA generation error: %v", err), utils.AppURI)
 	}
 
 	// Generate backup codes
@@ -198,7 +198,7 @@ func MFASetupPage(c *fiber.Ctx) error {
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Backup Codes Error",
 			"Failed to generate backup codes.",
-			"Please try again later.", fmt.Sprintf("Backup codes error: %v", err), "/protected")
+			"Please try again later.", fmt.Sprintf("Backup codes error: %v", err), utils.AppURI)
 	}
 
 	// Store in session temporarily (not in database yet)
@@ -210,11 +210,11 @@ func MFASetupPage(c *fiber.Ctx) error {
 		QRCode:      qrCode,
 		BackupCodes: backupCodes,
 	}
-	return responses.Render(c, "auth/mfa-setup", data)
+	return responses.Render(c, utils.MFASetupTemplate, data)
 }
 
 func MFAVerifyPage(c *fiber.Ctx) error {
-	return responses.Render(c, "auth/mfa-verify", fiber.Map{
+	return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 		"Title": "MFA Verify",
 	})
 }
@@ -224,14 +224,14 @@ func MFABackupCodesPage(c *fiber.Ctx) error {
 	if !userInfo.MFAEnabled {
 		return renderErrorPage(c, http.StatusBadRequest, "MFA Not Enabled",
 			"Multi-Factor Authentication is not enabled for your account.",
-			"You need to enable MFA first.", "", "/protected")
+			"You need to enable MFA first.", "", utils.AppURI)
 	}
 	// Generate new backup codes
 	backupCodes, err := libs.GenerateBackupCodes(10)
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Backup Codes Error",
 			"Failed to generate new backup codes.",
-			"Please try again later.", fmt.Sprintf("Backup codes error: %v", err), "/protected")
+			"Please try again later.", fmt.Sprintf("Backup codes error: %v", err), utils.AppURI)
 	}
 
 	// Get current MFA secret
@@ -239,7 +239,7 @@ func MFABackupCodesPage(c *fiber.Ctx) error {
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "MFA Settings Error",
 			"Failed to retrieve MFA settings.",
-			"Please try again later.", fmt.Sprintf("MFA get error: %v", err), "/protected")
+			"Please try again later.", fmt.Sprintf("MFA get error: %v", err), utils.AppURI)
 	}
 
 	// Update with new backup codes
@@ -247,16 +247,16 @@ func MFABackupCodesPage(c *fiber.Ctx) error {
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Database Error",
 			"Failed to save new backup codes.",
-			"Please try again later.", fmt.Sprintf("Backup codes save error: %v", err), "/protected")
+			"Please try again later.", fmt.Sprintf("Backup codes save error: %v", err), utils.AppURI)
 	}
-	return responses.Render(c, "auth/mfa-backup-codes", fiber.Map{
+	return responses.Render(c, utils.MFABackupCodesTemplate, fiber.Map{
 		"Title":       "MFA Backup Codes",
 		"BackupCodes": backupCodes,
 	})
 }
 
 func OneTimePage(c *fiber.Ctx) error {
-	return responses.Render(c, "auth/one-time", fiber.Map{
+	return responses.Render(c, utils.OneTimeTemplate, fiber.Map{
 		"Title": "One Time Password",
 	})
 }
@@ -267,26 +267,26 @@ func PostMFASetup(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return renderErrorPage(c, http.StatusBadRequest, "Verification Code Required",
 			"Please enter the verification code from your authenticator app.",
-			"", "", "/mfa/setup")
+			"", "", utils.MFASetupURI)
 	}
 	if req.Code == "" {
 		return renderErrorPage(c, http.StatusBadRequest, "Verification Code Required",
 			"Please enter the verification code from your authenticator app.",
-			"", "", "/mfa/setup")
+			"", "", utils.MFASetupURI)
 	}
 	// Get temporary secret from session
 	tempSecret, exists := getSessionData(c, "mfa_temp_secret")
 	if !exists || tempSecret == "" {
 		return renderErrorPage(c, http.StatusBadRequest, "Setup Session Expired",
 			"MFA setup session has expired.",
-			"Please start the setup process again.", "", "/mfa/setup")
+			"Please start the setup process again.", "", utils.MFASetupURI)
 	}
 
 	// Verify the code
 	if !libs.VerifyMFACode(req.Code, tempSecret) {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Verification Code",
 			"The verification code is incorrect.",
-			"Please check your authenticator app and try again.", "", "/mfa/setup")
+			"Please check your authenticator app and try again.", "", utils.MFASetupURI)
 	}
 
 	// Get backup codes from session
@@ -298,7 +298,7 @@ func PostMFASetup(c *fiber.Ctx) error {
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Database Error",
 			"Failed to save MFA settings.",
-			"Please try again later.", fmt.Sprintf("MFA save error: %v", err), "/protected")
+			"Please try again later.", fmt.Sprintf("MFA save error: %v", err), utils.AppURI)
 	}
 
 	// Enable MFA for the user
@@ -306,13 +306,13 @@ func PostMFASetup(c *fiber.Ctx) error {
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "MFA Enable Error",
 			"Failed to enable MFA for your account.",
-			"Please try again later.", fmt.Sprintf("MFA enable error: %v", err), "/protected")
+			"Please try again later.", fmt.Sprintf("MFA enable error: %v", err), utils.AppURI)
 	}
 
 	// Clear session data
 	clearSessionData(c, "mfa_temp_secret")
 	clearSessionData(c, "mfa_temp_backup_codes")
-	return responses.Render(c, "auth/mfa-enabled", fiber.Map{
+	return responses.Render(c, utils.MFAEnabledTemplate, fiber.Map{
 		"Title": "MFA Enabled",
 	})
 }
@@ -320,34 +320,34 @@ func PostMFASetup(c *fiber.Ctx) error {
 func PostMFAVerify(c *fiber.Ctx) error {
 	var req requests.MFARequest
 	if err := c.BodyParser(&req); err != nil {
-		return responses.Render(c, "auth/mfa-verify", fiber.Map{
+		return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 			"Error": "Unable to parse request data",
 		})
 	}
 	username := utils.SanitizeInput(strings.TrimSpace(req.Username))
 	code := req.Code
 	if username == "" {
-		return responses.Render(c, "auth/mfa-verify", fiber.Map{
+		return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 			"Username": username,
 			"Error":    "Username and code are required",
 		})
 	}
 	userInfo, hasUser := objects.Manager.LookupUserByUsername(username)
 	if !hasUser {
-		return responses.Render(c, "auth/mfa-verify", fiber.Map{
+		return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 			"Username": username,
 			"Error":    "User not found",
 		})
 	}
 	if !userInfo.MFAEnabled {
-		return responses.Render(c, "auth/mfa-verify", fiber.Map{
+		return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 			"Username": username,
 			"Error":    "MFA not enabled for this user",
 		})
 	}
 	secret, backupCodes, err := objects.Manager.Vault().GetUserMFA(userInfo.UserID)
 	if err != nil {
-		return responses.Render(c, "auth/mfa-verify", fiber.Map{
+		return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 			"Username": username,
 			"Error":    "Failed to retrieve MFA settings",
 		})
@@ -369,7 +369,7 @@ func PostMFAVerify(c *fiber.Ctx) error {
 	if !isValid {
 		clientIP := utils.GetClientIP(c)
 		objects.Manager.Security().RecordFailedLogin(clientIP)
-		return responses.Render(c, "auth/mfa-verify", fiber.Map{
+		return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 			"Username": username,
 			"UserInfo": userInfo,
 			"Error":    "Invalid MFA code. Please try again.",
@@ -378,12 +378,12 @@ func PostMFAVerify(c *fiber.Ctx) error {
 
 	// Based on user's login type, show appropriate login form
 	if userInfo.LoginType == "simple" {
-		return responses.Render(c, "auth/simple-login", fiber.Map{
+		return responses.Render(c, utils.SimpleLoginTemplate, fiber.Map{
 			"Username": username,
 			"UserInfo": userInfo,
 		})
 	}
-	return responses.Render(c, "auth/secured-login", fiber.Map{
+	return responses.Render(c, utils.SecuredLoginTemplate, fiber.Map{
 		"Username": username,
 		"UserInfo": userInfo,
 	})
@@ -393,7 +393,7 @@ func PostMFADisable(c *fiber.Ctx) error {
 	userInfo, _ := c.Locals("userInfo").(models.UserInfo)
 	var req requests.MFADisableRequest
 	if err := c.BodyParser(&req); err != nil {
-		return responses.Render(c, "auth/mfa-verify", fiber.Map{
+		return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 			"Error": "Unable to parse request data",
 		})
 	}
@@ -402,7 +402,7 @@ func PostMFADisable(c *fiber.Ctx) error {
 	if password == "" {
 		return renderErrorPage(c, http.StatusBadRequest, "Password Required",
 			"Please enter your current password to disable MFA.",
-			"", "", "/protected")
+			"", "", utils.AppURI)
 	}
 
 	// Verify password
@@ -410,13 +410,13 @@ func PostMFADisable(c *fiber.Ctx) error {
 	if err != nil {
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Password",
 			"The password you entered is incorrect.",
-			"Please try again.", "", "/login")
+			"Please try again.", "", utils.LoginURI)
 	}
 	ok, err := verifyPassword(password, storedSecret)
 	if !ok || err != nil {
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Password",
 			"The password you entered is incorrect.",
-			"Please try again.", "", "/login")
+			"Please try again.", "", utils.LoginURI)
 	}
 
 	// Disable MFA
@@ -424,9 +424,9 @@ func PostMFADisable(c *fiber.Ctx) error {
 	if err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "MFA Disable Error",
 			"Failed to disable MFA for your account.",
-			"Please try again later.", fmt.Sprintf("MFA disable error: %v", err), "/protected")
+			"Please try again later.", fmt.Sprintf("MFA disable error: %v", err), utils.AppURI)
 	}
-	return responses.Render(c, "auth/mfa-disabled", nil)
+	return responses.Render(c, utils.MFADisabledTemplate, nil)
 }
 
 func PostLogin(c *fiber.Ctx) error {
@@ -435,14 +435,14 @@ func PostLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Form Data",
 			"The form data could not be processed.",
 			"Please check your input and try again.",
-			fmt.Sprintf("ParseForm error: %v", err), "/login")
+			fmt.Sprintf("ParseForm error: %v", err), utils.LoginURI)
 	}
 	username := utils.SanitizeInput(strings.TrimSpace(req.Username))
 	if username == "" {
 		return renderErrorPage(c, http.StatusBadRequest, "Missing Username",
 			"Username is required to determine your login method.",
 			"Please provide your username (email or phone number).",
-			"Missing username field", "/login")
+			"Missing username field", utils.LoginURI)
 	}
 	var validationErr error
 	if utils.IsEmail(username) {
@@ -456,27 +456,27 @@ func PostLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Username Format",
 			"The username you provided is not valid.",
 			validationErr.Error(),
-			validationErr.Error(), "/login")
+			validationErr.Error(), utils.LoginURI)
 	}
 	userInfo, hasUser := objects.Manager.LookupUserByUsername(username)
 	if !hasUser {
 		return renderErrorPage(c, http.StatusNotFound, "User Not Found",
 			"No account found with that username.",
 			"Please check your username or register for a new account.",
-			fmt.Sprintf("Username '%s' not found", username), "/register")
+			fmt.Sprintf("Username '%s' not found", username), utils.RegisterURI)
 	}
 	if userInfo.MFAEnabled {
-		return responses.Render(c, "auth/mfa-verify", fiber.Map{
+		return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 			"Username": userInfo.Username,
 		})
 	}
 	if userInfo.LoginType == "simple" {
-		return responses.Render(c, "auth/simple-login", fiber.Map{
+		return responses.Render(c, utils.SimpleLoginTemplate, fiber.Map{
 			"Username": userInfo.Username,
 			"UserInfo": userInfo,
 		})
 	}
-	return responses.Render(c, "auth/secured-login", fiber.Map{
+	return responses.Render(c, utils.SecuredLoginTemplate, fiber.Map{
 		"Username": userInfo.Username,
 		"UserInfo": userInfo,
 	})
@@ -488,7 +488,7 @@ func PostRegister(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Form Data",
 			"The form data you submitted could not be processed.",
 			"Please check that all required fields are filled correctly and try again.",
-			fmt.Sprintf("ParseForm error: %v", err), "/register")
+			fmt.Sprintf("ParseForm error: %v", err), utils.RegisterURI)
 	}
 	username := utils.SanitizeInput(strings.TrimSpace(req.Username))
 	loginType := strings.ToLower(req.LoginType)
@@ -507,39 +507,39 @@ func PostRegister(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Username Format",
 			"The username you provided is not valid.",
 			validationErr.Error(),
-			validationErr.Error(), "/register")
+			validationErr.Error(), utils.RegisterURI)
 	}
 	if username == "" || req.Password == "" || req.ConfirmPassword == "" {
 		return renderErrorPage(c, http.StatusBadRequest, "Missing Required Information",
 			"Username, password, and password confirmation are required for registration.",
 			"Please provide all required fields including password confirmation.",
-			"Missing username, password, or confirmPassword fields", "/register")
+			"Missing username, password, or confirmPassword fields", utils.RegisterURI)
 	}
 	if req.Password != req.ConfirmPassword {
 		return renderErrorPage(c, http.StatusBadRequest, "Password Mismatch",
 			"The passwords you entered do not match.",
 			"Please ensure both password fields contain the same value.",
-			"Password confirmation mismatch", "/register")
+			"Password confirmation mismatch", utils.RegisterURI)
 	}
 	if err := utils.ValidatePassword(req.Password); err != nil {
 		return renderErrorPage(c, http.StatusBadRequest, "Weak Password",
 			"Your password does not meet the security requirements.",
 			err.Error(),
-			err.Error(), "/register")
+			err.Error(), utils.RegisterURI)
 	}
 	// Check if username (email/phone) already exists
 	if _, exists := objects.Manager.LookupUserByUsername(username); exists {
 		return renderErrorPage(c, http.StatusConflict, "Username Already Registered",
 			"This username is already associated with an existing account.",
 			"Please try logging in instead, or use a different email address or phone number.",
-			fmt.Sprintf("Username '%s' already exists in database", username), "/login")
+			fmt.Sprintf("Username '%s' already exists in database", username), utils.LoginURI)
 	}
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Registration System Error",
 			"Failed to generate verification token.",
 			"Our system encountered an error while processing your registration. Please try again.",
-			fmt.Sprintf("Random token generation failed: %v", err), "/register")
+			fmt.Sprintf("Random token generation failed: %v", err), utils.RegisterURI)
 	}
 	tokenStr := hex.EncodeToString(tokenBytes)
 	expiresAt := time.Now().Add(24 * time.Hour).Unix()
@@ -550,14 +550,14 @@ func PostRegister(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusInternalServerError, "Password Processing Error",
 			"Failed to securely process your password.",
 			"Our system encountered an error while securing your password. Please try again.",
-			fmt.Sprintf("bcrypt hash generation failed: %v", err), "/register")
+			fmt.Sprintf("bcrypt hash generation failed: %v", err), utils.RegisterURI)
 	}
 	// Store pending registration (username, password hash, login type)
 	if err := objects.Manager.Vault().CreatePendingRegistration(username, string(passwordHash), loginType); err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Registration Storage Error",
 			"Failed to store registration data.",
 			"Our system encountered an error while saving your registration. Please try again.",
-			fmt.Sprintf("Pending registration storage failed: %v", err), "/register")
+			fmt.Sprintf("Pending registration storage failed: %v", err), utils.RegisterURI)
 	}
 
 	if utils.IsEmail(username) {
@@ -586,7 +586,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Form Data",
 			"The login form data could not be processed.",
 			"Please check your input and try again.",
-			fmt.Sprintf("ParseForm error: %v", err), "/login")
+			fmt.Sprintf("ParseForm error: %v", err), utils.LoginURI)
 	}
 	username := utils.SanitizeInput(strings.TrimSpace(req.Username))
 	password := req.Password
@@ -594,7 +594,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Missing Login Information",
 			"Username and password are required for login.",
 			"Please provide both your username and password.",
-			"Missing username or password fields", "/login")
+			"Missing username or password fields", utils.LoginURI)
 	}
 	clientIP := utils.GetClientIP(c)
 	loginIdentifier := fmt.Sprintf("%s:%s", clientIP, username)
@@ -602,7 +602,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusTooManyRequests, "Login Temporarily Blocked",
 			"Too many failed login attempts.",
 			fmt.Sprintf("Please wait %d minutes before trying again.", int(loginCooldownPeriod.Minutes())),
-			fmt.Sprintf("Login blocked for %s from %s", username, clientIP), "/login")
+			fmt.Sprintf("Login blocked for %s from %s", username, clientIP), utils.LoginURI)
 	}
 	userInfo, hasUser := objects.Manager.LookupUserByUsername(username)
 	if !hasUser {
@@ -610,13 +610,13 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Credentials",
 			"The username or password you entered is incorrect.",
 			"Please check your credentials and try again, or register for a new account.",
-			"Username not found in database", "/login")
+			"Username not found in database", utils.LoginURI)
 	}
 	if userInfo.LoginType != "simple" {
 		return renderErrorPage(c, http.StatusForbidden, "Secured Login Required",
 			"Your account requires secured login with cryptographic key.",
 			"Please use the secured login option and provide your cryptographic key.",
-			"User account configured for secured login only", "/login")
+			"User account configured for secured login only", utils.LoginURI)
 	}
 	storedPassword, err := objects.Manager.Vault().GetUserSecret(userInfo.UserID)
 	if err != nil {
@@ -624,7 +624,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Credentials",
 			"The username or password you entered is incorrect.",
 			"Please check your credentials and try again, or register for a new account.",
-			"Password hash not found for user", "/login")
+			"Password hash not found for user", utils.LoginURI)
 	}
 
 	ok, err := verifyPassword(password, storedPassword)
@@ -633,7 +633,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Credentials",
 			"The username or password you entered is incorrect.",
 			"Please check your credentials and try again.",
-			"Password verification failed", "/login")
+			"Password verification failed", utils.LoginURI)
 	}
 	objects.Manager.Security().ClearLoginAttempts(loginIdentifier)
 	// Get public key for token creation
@@ -642,7 +642,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusInternalServerError, "Account Key Error",
 			"Could not retrieve your account's cryptographic keys.",
 			"There's an issue with your account setup. Please contact support.",
-			fmt.Sprintf("Public key retrieval failed: %v", err), "/login")
+			fmt.Sprintf("Public key retrieval failed: %v", err), utils.LoginURI)
 	}
 
 	pubHex := pubKeyX + ":" + pubKeyY
@@ -661,7 +661,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusInternalServerError, "Login Token Error",
 			"Failed to create authentication token.",
 			"There was an internal error during login. Please try again.",
-			fmt.Sprintf("PASETO token encryption failed: %v", err), "/login")
+			fmt.Sprintf("PASETO token encryption failed: %v", err), utils.LoginURI)
 	}
 	if userInfo, exists := objects.Manager.LookupUserByUsername(username); exists {
 		objects.Manager.LogoutTracker().ClearUserLogout(userInfo.UserID)
@@ -679,7 +679,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Form Data",
 			"The login form data could not be processed.",
 			"Please check your input and try again.",
-			fmt.Sprintf("ParseForm error: %v", err), "/login")
+			fmt.Sprintf("ParseForm error: %v", err), utils.LoginURI)
 	}
 	username := utils.SanitizeInput(strings.TrimSpace(req.Username))
 	password := req.Password
@@ -688,14 +688,14 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Missing Key File",
 			"No cryptographic key file was provided.",
 			"Please select your .json key file that was downloaded during registration.",
-			fmt.Sprintf("FormFile error: %v", err), "/login")
+			fmt.Sprintf("FormFile error: %v", err), utils.LoginURI)
 	}
 	file, err := multipartFile.Open()
 	if err != nil {
 		return renderErrorPage(c, http.StatusBadRequest, "Missing Key File",
 			"No cryptographic key file was provided.",
 			"Please select your .json key file that was downloaded during registration.",
-			fmt.Sprintf("FormFile error: %v", err), "/login")
+			fmt.Sprintf("FormFile error: %v", err), utils.LoginURI)
 	}
 	defer file.Close()
 
@@ -705,7 +705,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Key File Format",
 			"The key file could not be read or is not in the correct format.",
 			"Please ensure you're using the correct .json key file that was downloaded during registration.",
-			fmt.Sprintf("JSON decode error: %v", err), "/login")
+			fmt.Sprintf("JSON decode error: %v", err), utils.LoginURI)
 	}
 	pubx, ok1 := keyData["PubKeyX"]
 	puby, ok2 := keyData["PubKeyY"]
@@ -714,14 +714,14 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Incomplete Key File",
 			"The key file is missing required cryptographic data.",
 			"Please ensure you're using the complete, unmodified key file from registration.",
-			"Missing PubKeyX, PubKeyY, or EncryptedPrivateKeyD fields", "/login")
+			"Missing PubKeyX, PubKeyY, or EncryptedPrivateKeyD fields", utils.LoginURI)
 	}
 
 	if password == "" {
 		return renderErrorPage(c, http.StatusBadRequest, "Missing Password",
 			"Password is required to decrypt your private key.",
 			"Please enter the password you used during registration.",
-			"Password field is empty", "/login")
+			"Password field is empty", utils.LoginURI)
 	}
 
 	// Phase 1: Add rate limiting for secured login
@@ -734,7 +734,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusTooManyRequests, "Login Temporarily Blocked",
 			"Too many failed login attempts.",
 			fmt.Sprintf("Please wait %d minutes before trying again.", int(loginCooldownPeriod.Minutes())),
-			fmt.Sprintf("Login blocked for key %s from %s", pubHex[:16]+"...", clientIP), "/login")
+			fmt.Sprintf("Login blocked for key %s from %s", pubHex[:16]+"...", clientIP), utils.LoginURI)
 	}
 
 	info, exists := objects.Manager.LookupUserByPubHex(pubHex)
@@ -744,7 +744,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusUnauthorized, "Unrecognized Key",
 			"This cryptographic key is not associated with any registered user.",
 			"Please check that you're using the correct key file, or register for a new account.",
-			"Public key not found in user registry", "/register")
+			"Public key not found in user registry", utils.RegisterURI)
 	}
 
 	// Verify this matches the username provided
@@ -752,7 +752,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusUnauthorized, "Username/Key Mismatch",
 			"The cryptographic key does not belong to the specified username.",
 			"Please ensure you're using the correct key file for this account.",
-			"Username does not match key owner", "/login")
+			"Username does not match key owner", utils.LoginURI)
 	}
 
 	// Check if user has "simple" login type - they cannot use secured login
@@ -760,7 +760,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusForbidden, "Simple Login Required",
 			"Your account is configured for simple username/password login.",
 			"Please use the simple login option with your username and password.",
-			"User account configured for simple login only", "/login")
+			"User account configured for simple login only", utils.LoginURI)
 	}
 
 	// Validate public key from credentials table
@@ -771,7 +771,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusUnauthorized, "Key Validation Failed",
 			"The cryptographic key does not match our stored credentials.",
 			"There may be an issue with your key file or account. Please contact support.",
-			"Public key mismatch with stored credentials", "/login")
+			"Public key mismatch with stored credentials", utils.LoginURI)
 	}
 
 	passwordHash, err := objects.Manager.Vault().GetUserSecret(info.UserID)
@@ -781,7 +781,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusUnauthorized, "Account Verification Failed",
 			"Could not verify your account password.",
 			"There may be an issue with your account setup. Please contact support.",
-			fmt.Sprintf("Password hash retrieval failed: %v", err), "/login")
+			fmt.Sprintf("Password hash retrieval failed: %v", err), utils.LoginURI)
 	}
 
 	ok, err := verifyPassword(password, passwordHash)
@@ -790,7 +790,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusUnauthorized, "Incorrect Password",
 			"The password you entered is incorrect.",
 			"Please check your password and try again. This should be the same password you used during registration.",
-			"Password verification failed", "/login")
+			"Password verification failed", utils.LoginURI)
 	}
 	privD := utils.DecryptPrivateKeyD(encPrivD, passwordHash)
 	if _, err := hex.DecodeString(privD); err != nil {
@@ -798,7 +798,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusUnauthorized, "Key Decryption Failed",
 			"Could not decrypt your private key with the provided password.",
 			"Please check that you're using the correct password and key file combination.",
-			"Private key decryption failed or result is invalid hex", "/login")
+			"Private key decryption failed or result is invalid hex", utils.LoginURI)
 	}
 
 	nonce, ts := utils.GetNonceWithTimestamp()
@@ -809,7 +809,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusUnauthorized, "Cryptographic Proof Failed",
 			"The cryptographic proof verification failed.",
 			"There was an issue with the authentication process. Please try again.",
-			fmt.Sprintf("Proof verification failed: %v", err), "/login")
+			fmt.Sprintf("Proof verification failed: %v", err), utils.LoginURI)
 	}
 
 	// Phase 1: Clear failed login attempts on successful authentication
@@ -823,7 +823,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusInternalServerError, "Token Generation Failed",
 			"Failed to generate authentication token.",
 			"There was an internal error during login. Please try again.",
-			fmt.Sprintf("PASETO token encryption failed: %v", err), "/login")
+			fmt.Sprintf("PASETO token encryption failed: %v", err), utils.LoginURI)
 	}
 
 	enableHTTPS := objects.Config.GetBool("app.https")
@@ -845,7 +845,7 @@ func PostLogout(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "No Authentication Token",
 			"No authentication token found for logout.",
 			"You don't appear to be logged in. Please log in first if you want to access protected areas.",
-			"No session_token cookie or Authorization header found", "/login")
+			"No session_token cookie or Authorization header found", utils.LoginURI)
 	}
 	secret := objects.Config.GetString("auth.secret")
 	decTok, err := token.DecryptToken(tokenStr, []byte(secret))
@@ -853,7 +853,7 @@ func PostLogout(c *fiber.Ctx) error {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Authentication Token",
 			"The authentication token could not be processed for logout.",
 			"Your session may have been corrupted. Please try logging in again.",
-			fmt.Sprintf("Token decryption failed during logout: %v", err), "/login")
+			fmt.Sprintf("Token decryption failed during logout: %v", err), utils.LoginURI)
 	}
 	exp, _ := decTok.Claims["exp"].(int64)
 	if exp == 0 {
@@ -898,5 +898,5 @@ func renderErrorPage(c *fiber.Ctx, statusCode int, title, message, description, 
 		RetryURL:    retryURL,
 		ErrorID:     errorID,
 	}
-	return responses.Render(c, "auth/error", data)
+	return responses.Render(c, utils.ErrorTemplate, data)
 }

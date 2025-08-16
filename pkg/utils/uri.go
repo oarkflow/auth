@@ -19,6 +19,28 @@ var (
 	MFABackupCodesURI = "/mfa/backup-codes"
 )
 
+var (
+	LandingTemplate        = "auth/index"
+	DownloadKeyTemplate    = "auth/download-key-file"
+	HealthTemplate         = "auth/health"
+	AppTemplate            = "auth/protected"
+	LoginTemplate          = "auth/login"
+	RegisterTemplate       = "auth/register"
+	VerifyTemplate         = "auth/verify"
+	ForgotPasswordTemplate = "auth/forgot-password"
+	OneTimeTemplate        = "auth/one-time"
+	SimpleLoginTemplate    = "auth/simple-login"
+	SecuredLoginTemplate   = "auth/secured-login"
+	MFAVerifyTemplate      = "auth/mfa-verify"
+	LogoutTemplate         = "auth/logout"
+	UserInfoTemplate       = "auth/userinfo"
+	MFAEnabledTemplate     = "auth/mfa-enabled"
+	MFADisabledTemplate    = "auth/mfa-disabled"
+	MFASetupTemplate       = "auth/mfa-setup"
+	ErrorTemplate          = "auth/error"
+	MFABackupCodesTemplate = "auth/mfa-backup-codes"
+)
+
 func GetURIs() map[string]string {
 	return map[string]string{
 		"Landing":        LandingURI,
