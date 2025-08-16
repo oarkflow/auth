@@ -12,7 +12,8 @@ type RateLimiter struct {
 }
 
 type UserInfo struct {
-	UserID         int64    `db:"user_id"` // changed from string to int64
+	UserID         int64    `db:"user_id"`
+	PubHex         string   `db:"pub_hex"`
 	Username       string   `db:"username"`
 	LoginType      string   `db:"login_type"`
 	MFAEnabled     bool     `db:"mfa_enabled"`

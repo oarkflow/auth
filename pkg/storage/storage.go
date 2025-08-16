@@ -515,12 +515,13 @@ func (d *DatabaseStorage) SetUserInfo(pubHex string, info models.UserInfo) error
 }
 
 func (d *DatabaseStorage) GetUserInfo(pubHex string) (models.UserInfo, error) {
-	query := `SELECT user_id, username, login_type, mfa_enabled FROM users WHERE pub_hex = :pub_hex`
+	query := `SELECT user_id, username, login_type, mfa_enabled, pub_hex FROM users WHERE pub_hex = :pub_hex`
 	params := map[string]any{
 		"pub_hex": pubHex,
 	}
 
 	var rawResult struct {
+		PubHex     string `db:"pub_hex"`
 		UserID     int64  `db:"user_id"`
 		Username   string `db:"username"`
 		LoginType  string `db:"login_type"`
@@ -537,18 +538,20 @@ func (d *DatabaseStorage) GetUserInfo(pubHex string) (models.UserInfo, error) {
 		Username:   rawResult.Username,
 		LoginType:  rawResult.LoginType,
 		MFAEnabled: d.convertBoolFromDB(rawResult.MFAEnabled),
+		PubHex:     rawResult.PubHex,
 	}
 
 	return info, nil
 }
 
 func (d *DatabaseStorage) GetUserInfoByUsername(username string) (models.UserInfo, error) {
-	query := `SELECT user_id, username, login_type, mfa_enabled FROM users WHERE username = :username`
+	query := `SELECT user_id, username, login_type, mfa_enabled, pub_hex FROM users WHERE username = :username`
 	params := map[string]any{
 		"username": username,
 	}
 
 	var rawResult struct {
+		PubHex     string `db:"pub_hex"`
 		UserID     int64  `db:"user_id"`
 		Username   string `db:"username"`
 		LoginType  string `db:"login_type"`
@@ -565,6 +568,7 @@ func (d *DatabaseStorage) GetUserInfoByUsername(username string) (models.UserInf
 		Username:   rawResult.Username,
 		LoginType:  rawResult.LoginType,
 		MFAEnabled: d.convertBoolFromDB(rawResult.MFAEnabled),
+		PubHex:     rawResult.PubHex,
 	}
 
 	return info, nil

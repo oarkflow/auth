@@ -12,6 +12,8 @@ func Setup(prefix string, router fiber.Router) {
 	route.Get(utils.HealthURI, handlers.HealthCheck)
 	route.Get(utils.LandingURI, handlers.LandingPage)
 	route.Get(utils.VerifyURI, handlers.VerifyPage)
+	route.Get(utils.ResetPasswordURI, handlers.PasswordResetPage)
+	route.Post(utils.ResetPasswordURI, handlers.PostResetPassword)
 	route.Get(utils.LoginURI, handlers.LoginPage)
 	route.Post(utils.LoginURI, handlers.PostLogin)
 	route.Get(utils.RegisterURI, handlers.RegisterPage)
