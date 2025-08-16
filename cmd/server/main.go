@@ -25,7 +25,7 @@ func main() {
 	cfg := config.Config{}
 	cfg.Load()
 	app := fiber.New()
-	authPlugin := v2.NewPlugin("/", libs.NotificationHandler{}, app)
+	authPlugin := v2.NewPlugin("/", "https://google.com", libs.NotificationHandler{}, app)
 	authPlugin.Register()
 	if err := app.Listen(":3000"); err != nil {
 		log.Fatal(err)

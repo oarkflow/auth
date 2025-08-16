@@ -131,8 +131,9 @@ func (s *SecurityManager) ClearLoginAttempts(identifier string) {
 }
 
 type Manager struct {
-	vault  contracts.Storage
-	Config *Config
+	vault           contracts.Storage
+	Config          *Config
+	LoginSuccessURL string
 	// Authentication state
 	UserRegistry      map[string]ecdsa.PublicKey
 	UserRegistryMu    sync.RWMutex

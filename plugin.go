@@ -23,6 +23,7 @@ var Assets embed.FS
 type Plugin struct {
 	App              *fiber.App
 	Prefix           string
+	LoginSuccessURL  string
 	Assets           embed.FS
 	SendNotification libs.NotificationHandler
 }
@@ -35,6 +36,7 @@ func (p *Plugin) Register() {
 	}
 	manager := libs.NewManager(vault, cfg)
 	manager.SendNotification = p.SendNotification
+	manager.LoginSuccessURL = p.LoginSuccessURL
 	objects.Manager = manager
 	routes.Setup(p.Prefix, p.App)
 	routes.ProtectedRoutes(p.App.Group(p.Prefix, middlewares.Verify))
@@ -55,7 +57,7 @@ func (p *Plugin) Close() error {
 	return nil
 }
 
-func NewPlugin(prefix string, notificationHandler libs.NotificationHandler, apps ...*fiber.App) *Plugin {
+func NewPlugin(prefix, loginSuccessURL string, notificationHandler libs.NotificationHandler, apps ...*fiber.App) *Plugin {
 	var app *fiber.App
 	if len(apps) > 0 {
 		app = apps[0]
@@ -79,6 +81,7 @@ func NewPlugin(prefix string, notificationHandler libs.NotificationHandler, apps
 		Prefix:           prefix,
 		App:              app,
 		Assets:           Assets,
+		LoginSuccessURL:  loginSuccessURL,
 		SendNotification: notificationHandler,
 	}
 	return plugin

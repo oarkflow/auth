@@ -422,7 +422,12 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 	appEnv := objects.Config.GetString("app.env")
 	sessionName := objects.Config.GetString("auth.session_name")
 	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr))
-	return c.Redirect(utils.AppURI, fiber.StatusSeeOther)
+	manager, ok := objects.Manager.(*libs.Manager)
+	uri := utils.AppURI
+	if ok && manager.LoginSuccessURL != "" {
+		uri = manager.LoginSuccessURL
+	}
+	return c.Redirect(uri, fiber.StatusSeeOther)
 }
 
 func PostSecureLogin(c *fiber.Ctx) error {
@@ -582,7 +587,12 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	appEnv := objects.Config.GetString("app.env")
 	sessionName := objects.Config.GetString("auth.session_name")
 	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr))
-	return c.Redirect(utils.AppURI, fiber.StatusSeeOther)
+	manager, ok := objects.Manager.(*libs.Manager)
+	uri := utils.AppURI
+	if ok && manager.LoginSuccessURL != "" {
+		uri = manager.LoginSuccessURL
+	}
+	return c.Redirect(uri, fiber.StatusSeeOther)
 }
 
 func PostLogout(c *fiber.Ctx) error {
