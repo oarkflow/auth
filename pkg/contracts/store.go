@@ -11,6 +11,8 @@ type Storage interface {
 	GetUserInfoByUsername(username string) (models.UserInfo, error)
 	SetUserSecret(userID, secret string) error
 	GetUserSecret(userID string) (string, error)
+	SetVerificationToken(username, token string, expiresAt int64) error
+	VerifyToken(username, token string) (bool, error)
 	SetUserPublicKey(userID string, pubKeyX, pubKeyY string) error
 	GetUserPublicKey(userID string) (map[string]string, error)
 	SetUserMFA(userID string, secret string, backupCodes []string) error
@@ -20,4 +22,7 @@ type Storage interface {
 	IsUserMFAEnabled(userID string) (bool, error)
 	ValidateBackupCode(userID, code string) error
 	InvalidateBackupCode(userID, code string) error
+	CreatePendingRegistration(username, passwordHash, loginType string) error
+	GetPendingRegistration(username string) (string, string, error)
+	DeletePendingRegistration(username string) error
 }

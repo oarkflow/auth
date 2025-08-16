@@ -112,19 +112,23 @@ func VerifyPage(c *fiber.Ctx) error {
 			"Please check that you clicked the complete link from your email or SMS, or try registering again.",
 			"Missing username or token in verification URL", "/register")
 	}
-	if !objects.Manager.VerifyToken(username, token) {
+	// Use verification token table
+	ok, err := objects.Manager.Vault().VerifyToken(username, token)
+	if err != nil || !ok {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Verification",
 			"This verification link is either invalid or has already been used.",
 			"The link may have expired or been used already. Please try registering again to get a new verification link.",
 			"Verification token does not match or does not exist", "/register")
 	}
 
-	// Get login type preference
-	loginType, err := objects.Manager.Vault().GetUserSecret(username + "_logintype")
+	// Retrieve pending registration data
+	passwordHash, loginType, err := objects.Manager.Vault().GetPendingRegistration(username)
 	if err != nil {
-		loginType = "simple" // default to simple
+		return renderErrorPage(c, http.StatusInternalServerError, "Account Setup Error",
+			"Failed to complete account setup due to missing registration information.",
+			"There was an issue finalizing your account. Please try registering again.",
+			"Pending registration not found during verification", "/register")
 	}
-	objects.Manager.Vault().SetUserSecret(username+"_logintype", "") // Remove temp
 
 	// Generate key pair after verification
 	pubx, puby, privd := libs.GenerateKeyPair()
@@ -135,28 +139,13 @@ func VerifyPage(c *fiber.Ctx) error {
 		LoginType: loginType,
 	}
 	objects.Manager.Vault().SetUserInfo(pubHex, info)
-	// Store public key in credentials table
 	objects.Manager.Vault().SetUserPublicKey(info.UserID, libs.PadHex(pubx), libs.PadHex(puby))
 	objects.Manager.RegisterUserKey(pubHex, []byte(pubx), []byte(puby))
-	// Retrieve password hash and move to DBUserID key
-	passwordHash, err := objects.Manager.Vault().GetUserSecret(username)
-	if err == nil {
-		objects.Manager.Vault().SetUserSecret(info.UserID, passwordHash)
-		objects.Manager.Vault().SetUserSecret(username, "") // Remove temp
-	}
-	// Retrieve plaintext password for encryption
-	password, err := objects.Manager.Vault().GetUserSecret(username + "_plain")
-	objects.Manager.Vault().SetUserSecret(username+"_plain", "") // Remove temp
-	if err != nil || password == "" {
-		return renderErrorPage(c, http.StatusInternalServerError, "Account Setup Error",
-			"Failed to complete account setup due to missing password information.",
-			"There was an issue finalizing your account. Please try registering again.",
-			"Password not found for key encryption during verification", "/register")
-	}
-	if loginType == "simple" {
-		return c.Redirect(utils.LoginURI, http.StatusSeeOther)
-	}
-	encPrivD := utils.EncryptPrivateKeyD(privd, password)
+	objects.Manager.Vault().SetUserSecret(info.UserID, passwordHash)
+
+	// Remove pending registration
+	objects.Manager.Vault().DeletePendingRegistration(username)
+	encPrivD := utils.EncryptPrivateKeyD(privd, passwordHash)
 	keyData := map[string]string{
 		"PubKeyX":              libs.PadHex(pubx),
 		"PubKeyY":              libs.PadHex(puby),
@@ -504,7 +493,7 @@ func PostRegister(c *fiber.Ctx) error {
 	username := utils.SanitizeInput(strings.TrimSpace(req.Username))
 	loginType := strings.ToLower(req.LoginType)
 	if loginType != "simple" && loginType != "secured" {
-		loginType = "simple" // Default to simple login if invalid type
+		loginType = "simple"
 	}
 	var validationErr error
 	if utils.IsEmail(username) {
@@ -545,7 +534,6 @@ func PostRegister(c *fiber.Ctx) error {
 			"Please try logging in instead, or use a different email address or phone number.",
 			fmt.Sprintf("Username '%s' already exists in database", username), "/login")
 	}
-	// Only store username for now, keys generated after verification
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return renderErrorPage(c, http.StatusInternalServerError, "Registration System Error",
@@ -554,10 +542,8 @@ func PostRegister(c *fiber.Ctx) error {
 			fmt.Sprintf("Random token generation failed: %v", err), "/register")
 	}
 	tokenStr := hex.EncodeToString(tokenBytes)
-	objects.Manager.SetVerificationToken(username, tokenStr)
-
-	// Store login type preference temporarily
-	objects.Manager.Vault().SetUserSecret(username+"_logintype", loginType)
+	expiresAt := time.Now().Add(24 * time.Hour).Unix()
+	objects.Manager.Vault().SetVerificationToken(username, tokenStr, expiresAt)
 
 	passwordHash, err := hash.Make(req.Password, objects.Config.GetString("auth.password_algo"))
 	if err != nil {
@@ -566,9 +552,14 @@ func PostRegister(c *fiber.Ctx) error {
 			"Our system encountered an error while securing your password. Please try again.",
 			fmt.Sprintf("bcrypt hash generation failed: %v", err), "/register")
 	}
-	objects.Manager.Vault().SetUserSecret(username, string(passwordHash))
-	// Store password temporarily for verification step
-	objects.Manager.Vault().SetUserSecret(username+"_plain", req.Password)
+	// Store pending registration (username, password hash, login type)
+	if err := objects.Manager.Vault().CreatePendingRegistration(username, string(passwordHash), loginType); err != nil {
+		return renderErrorPage(c, http.StatusInternalServerError, "Registration Storage Error",
+			"Failed to store registration data.",
+			"Our system encountered an error while saving your registration. Please try again.",
+			fmt.Sprintf("Pending registration storage failed: %v", err), "/register")
+	}
+
 	if utils.IsEmail(username) {
 		utils.SendVerificationEmail(username, tokenStr)
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
@@ -801,7 +792,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 			"Please check your password and try again. This should be the same password you used during registration.",
 			"Password verification failed", "/login")
 	}
-	privD := utils.DecryptPrivateKeyD(encPrivD, password)
+	privD := utils.DecryptPrivateKeyD(encPrivD, passwordHash)
 	if _, err := hex.DecodeString(privD); err != nil {
 		log.Printf("Decrypted PrivateKeyD is not valid hex: %v", err)
 		return renderErrorPage(c, http.StatusUnauthorized, "Key Decryption Failed",

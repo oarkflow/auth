@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/oarkflow/squealx"
 
@@ -91,6 +92,23 @@ func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
 		FOREIGN KEY (user_id) REFERENCES users (user_id)
 	);
 
+	CREATE TABLE IF NOT EXISTS verification_tokens (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		username TEXT NOT NULL,
+		token TEXT NOT NULL,
+		expires_at DATETIME NOT NULL,
+		used BOOLEAN DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS pending_registrations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		username TEXT UNIQUE NOT NULL,
+		password_hash TEXT NOT NULL,
+		login_type TEXT DEFAULT 'simple' CHECK (login_type IN ('simple', 'secured')),
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	-- Performance indexes
 	CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 	CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
@@ -105,6 +123,9 @@ func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
 	CREATE INDEX IF NOT EXISTS idx_access_tokens_client_id ON access_tokens(client_id);
 	CREATE INDEX IF NOT EXISTS idx_access_tokens_user_id ON access_tokens(user_id);
 	CREATE INDEX IF NOT EXISTS idx_refresh_tokens_client_id ON refresh_tokens(client_id);
+	CREATE INDEX IF NOT EXISTS idx_verification_tokens_username ON verification_tokens(username);
+	CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token);
+	CREATE INDEX IF NOT EXISTS idx_pending_registrations_username ON pending_registrations(username);
 
 	-- Audit log table
 	CREATE TABLE IF NOT EXISTS audit_logs (
@@ -130,6 +151,47 @@ func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
 	return &DatabaseStorage{db: db}, nil
 }
 
+// --- Verification Token Methods ---
+func (v *DatabaseStorage) SetVerificationToken(username, token string, expiresAt int64) error {
+	_, err := v.db.Exec(`INSERT INTO verification_tokens (username, token, expires_at, used) VALUES (?, ?, ?, 0)`, username, token, expiresAt)
+	return err
+}
+
+func (v *DatabaseStorage) VerifyToken(username, token string) (bool, error) {
+	var used bool
+	var expiresAt int64
+	err := v.db.QueryRow(`SELECT used, expires_at FROM verification_tokens WHERE username = ? AND token = ?`, username, token).Scan(&used, &expiresAt)
+	if err != nil {
+		return false, err
+	}
+	if used || expiresAt < time.Now().Unix() {
+		return false, nil
+	}
+	_, err = v.db.Exec(`UPDATE verification_tokens SET used = 1 WHERE username = ? AND token = ?`, username, token)
+	return err == nil, err
+}
+
+// --- Pending Registration Methods ---
+func (v *DatabaseStorage) CreatePendingRegistration(username, passwordHash, loginType string) error {
+	_, err := v.db.Exec(`INSERT INTO pending_registrations (username, password_hash, login_type) VALUES (?, ?, ?)`, username, passwordHash, loginType)
+	return err
+}
+
+func (v *DatabaseStorage) GetPendingRegistration(username string) (string, string, error) {
+	var passwordHash, loginType string
+	err := v.db.QueryRow(`SELECT password_hash, login_type FROM pending_registrations WHERE username = ?`, username).Scan(&passwordHash, &loginType)
+	if err != nil {
+		return "", "", err
+	}
+	return passwordHash, loginType, nil
+}
+
+func (v *DatabaseStorage) DeletePendingRegistration(username string) error {
+	_, err := v.db.Exec(`DELETE FROM pending_registrations WHERE username = ?`, username)
+	return err
+}
+
+// --- User Info and Credentials ---
 func (v *DatabaseStorage) SetUserInfo(pubHex string, info models.UserInfo) error {
 	_, err := v.db.Exec(`INSERT OR REPLACE INTO users (pub_hex, username, user_id, login_type, mfa_enabled) VALUES (?, ?, ?, ?, ?)`,
 		pubHex, info.Username, info.UserID, info.LoginType, info.MFAEnabled)
