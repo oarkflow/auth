@@ -27,6 +27,18 @@
 <body class="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
     <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div class="max-w-md w-full space-y-8">
+            <!-- Success Message (hidden by default) -->
+            <div id="verification-success"
+                class="hidden bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-center mb-4">
+                <div class="flex items-center justify-center mb-1">
+                    <svg class="h-5 w-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <span class="font-semibold">Verification successful!</span>
+                </div>
+                <span>Your account has been verified. You may now sign in.</span>
+            </div>
+
             <!-- Header -->
             <div class="text-center">
                 <div class="mx-auto h-16 w-16 bg-primary-500 rounded-full flex items-center justify-center mb-6">
@@ -100,6 +112,12 @@
             </div>
         </div>
     </div>
+    <script>
+        // Show success message if ?v=1 is present
+        if (new URLSearchParams(window.location.search).get('v') === '1') {
+            document.getElementById('verification-success').classList.remove('hidden');
+        }
+    </script>
 </body>
 
 </html>

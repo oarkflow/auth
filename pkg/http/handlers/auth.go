@@ -145,6 +145,9 @@ func VerifyPage(c *fiber.Ctx) error {
 
 	// Remove pending registration
 	objects.Manager.Vault().DeletePendingRegistration(username)
+	if loginType == "simple" {
+		return c.Redirect(utils.LoginURI+"?v=1", fiber.StatusSeeOther)
+	}
 	encPrivD := utils.EncryptPrivateKeyD(privd, passwordHash)
 	keyData := map[string]string{
 		"PubKeyX":              libs.PadHex(pubx),
@@ -560,19 +563,19 @@ func PostRegister(c *fiber.Ctx) error {
 			fmt.Sprintf("Pending registration storage failed: %v", err), utils.RegisterURI)
 	}
 
-	if utils.IsEmail(username) {
-		utils.SendVerificationEmail(username, tokenStr)
-		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-			"message": "Registered. Please check your email for verification.",
-		})
-	} else if utils.IsPhone(username) {
-		utils.SendVerificationSMS(username, tokenStr)
-		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-			"message": "Registered. Please check your phone for verification.",
+	if utils.IsPhone(username) {
+		utils.SendVerificationSMS(c, username, tokenStr)
+		return responses.Render(c, utils.VerificationSentTemplate, fiber.Map{
+			"Title":   "Verification Sent",
+			"Message": "Registered. Please check your phone for verification.",
+			"Contact": username,
 		})
 	}
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "Registered. Unknown username type, cannot send verification.",
+	utils.SendVerificationEmail(c, username, tokenStr)
+	return responses.Render(c, utils.VerificationSentTemplate, fiber.Map{
+		"Title":   "Verification Sent",
+		"Message": "Registered. Please check your email for verification.",
+		"Contact": username,
 	})
 }
 

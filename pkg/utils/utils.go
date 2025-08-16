@@ -47,30 +47,30 @@ func IsPhone(username string) bool {
 }
 
 // Send verification email (demo: just print link)
-func SendVerificationEmail(email, token string) error {
-	link := fmt.Sprintf("http://localhost:3000/verify?username=%s&token=%s", email, token)
-	log.Printf("Verification EMAIL link for %s: %s", email, link)
+func SendVerificationEmail(c *fiber.Ctx, email, token string) error {
+	path := c.BaseURL() + VerifyURI + "?username=" + email + "&token=" + token
+	log.Printf("Verification EMAIL link for %s: %s", email, path)
 	return nil
 }
 
 // Send verification SMS (demo: just print link)
-func SendVerificationSMS(phone, token string) error {
-	link := fmt.Sprintf("http://localhost:3000/verify?username=%s&token=%s", phone, token)
-	log.Printf("Verification SMS link for %s: %s", phone, link)
+func SendVerificationSMS(c *fiber.Ctx, phone, token string) error {
+	path := c.BaseURL() + VerifyURI + "?username=" + phone + "&token=" + token
+	log.Printf("Verification SMS link for %s: %s", phone, path)
 	return nil
 }
 
 // Send password reset email (demo: just print link)
-func SendPasswordResetEmail(email, token string) error {
-	link := fmt.Sprintf("http://localhost:3000/reset-password?token=%s", token)
-	log.Printf("Password RESET link for %s: %s", email, link)
+func SendPasswordResetEmail(c *fiber.Ctx, email, token string) error {
+	path := c.BaseURL() + ResetPasswordURI + "?token=" + token
+	log.Printf("Password RESET link for %s: %s", email, path)
 	return nil
 }
 
 // Send password reset SMS (demo: just print link)
-func SendPasswordResetSMS(phone, token string) error {
-	link := fmt.Sprintf("http://localhost:3000/reset-password?token=%s", token)
-	log.Printf("Password RESET SMS for %s: %s", phone, link)
+func SendPasswordResetSMS(c *fiber.Ctx, phone, token string) error {
+	path := c.BaseURL() + ResetPasswordURI + "?token=" + token
+	log.Printf("Password RESET SMS for %s: %s", phone, path)
 	return nil
 }
 
