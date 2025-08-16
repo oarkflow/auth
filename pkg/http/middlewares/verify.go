@@ -53,6 +53,7 @@ func Verify(c *fiber.Ctx) error {
 		return SendError(c, fiber.StatusUnauthorized, "user not found")
 	}
 	c.Locals("userInfo", userInfo)
+	c.Locals("user_id", userInfo.UserID)
 	c.Locals("user", claims["sub"])
 	c.Locals("claims", claims)
 	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")

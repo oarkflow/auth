@@ -31,7 +31,7 @@ func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database connection is nil")
 	}
-	fmt.Println(db.DriverName())
+
 	storage := &DatabaseStorage{
 		db:     db,
 		dbType: DatabaseType(db.DriverName()),
@@ -77,10 +77,10 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 			username VARCHAR(255) UNIQUE NOT NULL,
 			user_id BIGINT NOT NULL,
 			login_type ENUM('simple', 'secured') DEFAULT 'simple',
-			mfa_enabled BOOLEAN DEFAULT FALSE,
+			mfa_enabled TINYINT(1) DEFAULT 0,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			is_active BOOLEAN DEFAULT TRUE,
+			is_active TINYINT(1) DEFAULT 1,
 			failed_attempts INT DEFAULT 0,
 			locked_until TIMESTAMP NULL,
 			INDEX idx_users_username (username),
@@ -107,7 +107,7 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 			username VARCHAR(255) NOT NULL,
 			token VARCHAR(255) NOT NULL,
 			expires_at BIGINT NOT NULL,
-			used BOOLEAN DEFAULT FALSE,
+			used TINYINT(1) DEFAULT 0,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			INDEX idx_verification_tokens_username (username),
 			INDEX idx_verification_tokens_token (token)
@@ -129,7 +129,7 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 			resource VARCHAR(255),
 			ip_address VARCHAR(45),
 			user_agent TEXT,
-			success BOOLEAN,
+			success TINYINT(1),
 			error_message TEXT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			INDEX idx_audit_logs_user_id (user_id),
@@ -142,7 +142,11 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 // getPostgreSQLSchema returns PostgreSQL-specific schema
 func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 	return []string{
-		`CREATE TYPE login_type_enum AS ENUM ('simple', 'secured')`,
+		`DO $$ BEGIN
+			CREATE TYPE login_type_enum AS ENUM ('simple', 'secured');
+		EXCEPTION
+			WHEN duplicate_object THEN null;
+		END $$`,
 
 		`CREATE TABLE IF NOT EXISTS users (
 			pub_hex VARCHAR(255) PRIMARY KEY,
@@ -213,7 +217,7 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 	}
 }
 
-// getSQLiteSchema returns SQLite-specific schema (original)
+// getSQLiteSchema returns SQLite-specific schema
 func (d *DatabaseStorage) getSQLiteSchema() []string {
 	return []string{
 		`CREATE TABLE IF NOT EXISTS users (
@@ -221,10 +225,10 @@ func (d *DatabaseStorage) getSQLiteSchema() []string {
 			username TEXT UNIQUE NOT NULL,
 			user_id INTEGER NOT NULL,
 			login_type TEXT DEFAULT 'simple' CHECK (login_type IN ('simple', 'secured')),
-			mfa_enabled BOOLEAN DEFAULT 0,
+			mfa_enabled INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			is_active BOOLEAN DEFAULT 1,
+			is_active INTEGER DEFAULT 1,
 			failed_attempts INTEGER DEFAULT 0,
 			locked_until DATETIME NULL
 		)`,
@@ -245,7 +249,7 @@ func (d *DatabaseStorage) getSQLiteSchema() []string {
 			username TEXT NOT NULL,
 			token TEXT NOT NULL,
 			expires_at INTEGER NOT NULL,
-			used BOOLEAN DEFAULT 0,
+			used INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
@@ -264,7 +268,7 @@ func (d *DatabaseStorage) getSQLiteSchema() []string {
 			resource TEXT,
 			ip_address TEXT,
 			user_agent TEXT,
-			success BOOLEAN,
+			success INTEGER,
 			error_message TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -285,15 +289,64 @@ func (d *DatabaseStorage) getSQLiteSchema() []string {
 	}
 }
 
+// convertBoolForDB converts boolean values to database-specific format
+func (d *DatabaseStorage) convertBoolForDB(value bool) any {
+	switch d.dbType {
+	case MySQL:
+		if value {
+			return 1
+		}
+		return 0
+	case PostgreSQL:
+		return value // PostgreSQL supports native boolean
+	case SQLite:
+		if value {
+			return 1
+		}
+		return 0
+	default:
+		return value
+	}
+}
+
+// convertBoolFromDB converts database boolean values to Go boolean
+func (d *DatabaseStorage) convertBoolFromDB(value any) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case int64:
+		return v != 0
+	case int32:
+		return v != 0
+	case int:
+		return v != 0
+	case string:
+		return v == "1" || strings.ToLower(v) == "true"
+	case []byte:
+		str := string(v)
+		return str == "1" || strings.ToLower(str) == "true"
+	default:
+		return false
+	}
+}
+
 // upsertUser performs database-agnostic upsert operation for users
 func (d *DatabaseStorage) upsertUser(pubHex string, info models.UserInfo) error {
 	// First, try to update existing record
-	result, err := d.db.Exec(`
+	updateQuery := `
 		UPDATE users
-		SET username = ?, user_id = ?, login_type = ?, mfa_enabled = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE pub_hex = ?`,
-		info.Username, info.UserID, info.LoginType, info.MFAEnabled, pubHex)
+		SET username = :username, user_id = :user_id, login_type = :login_type, mfa_enabled = :mfa_enabled, updated_at = CURRENT_TIMESTAMP
+		WHERE pub_hex = :pub_hex`
 
+	updateParams := map[string]any{
+		"username":    info.Username,
+		"user_id":     info.UserID,
+		"login_type":  info.LoginType,
+		"mfa_enabled": d.convertBoolForDB(info.MFAEnabled),
+		"pub_hex":     pubHex,
+	}
+
+	result, err := d.db.NamedExec(updateQuery, updateParams)
 	if err != nil {
 		return err
 	}
@@ -306,10 +359,19 @@ func (d *DatabaseStorage) upsertUser(pubHex string, info models.UserInfo) error 
 
 	// If no rows were updated, insert new record
 	if rowsAffected == 0 {
-		_, err = d.db.Exec(`
+		insertQuery := `
 			INSERT INTO users (pub_hex, username, user_id, login_type, mfa_enabled)
-			VALUES (?, ?, ?, ?, ?)`,
-			pubHex, info.Username, info.UserID, info.LoginType, info.MFAEnabled)
+			VALUES (:pub_hex, :username, :user_id, :login_type, :mfa_enabled)`
+
+		insertParams := map[string]any{
+			"pub_hex":     pubHex,
+			"username":    info.Username,
+			"user_id":     info.UserID,
+			"login_type":  info.LoginType,
+			"mfa_enabled": d.convertBoolForDB(info.MFAEnabled),
+		}
+
+		_, err = d.db.NamedExec(insertQuery, insertParams)
 		return err
 	}
 
@@ -319,12 +381,19 @@ func (d *DatabaseStorage) upsertUser(pubHex string, info models.UserInfo) error 
 // upsertCredential performs database-agnostic upsert operation for credentials
 func (d *DatabaseStorage) upsertCredential(userID int64, secret, secretType, metadata string) error {
 	// First, try to update existing record
-	result, err := d.db.Exec(`
+	updateQuery := `
 		UPDATE credentials
-		SET secret = ?, metadata = ?, updated_at = CURRENT_TIMESTAMP
-		WHERE user_id = ? AND secret_type = ?`,
-		secret, metadata, userID, secretType)
+		SET secret = :secret, metadata = :metadata, updated_at = CURRENT_TIMESTAMP
+		WHERE user_id = :user_id AND secret_type = :secret_type`
 
+	updateParams := map[string]any{
+		"secret":      secret,
+		"metadata":    metadata,
+		"user_id":     userID,
+		"secret_type": secretType,
+	}
+
+	result, err := d.db.NamedExec(updateQuery, updateParams)
 	if err != nil {
 		return err
 	}
@@ -337,10 +406,18 @@ func (d *DatabaseStorage) upsertCredential(userID int64, secret, secretType, met
 
 	// If no rows were updated, insert new record
 	if rowsAffected == 0 {
-		_, err = d.db.Exec(`
+		insertQuery := `
 			INSERT INTO credentials (user_id, secret, secret_type, metadata)
-			VALUES (?, ?, ?, ?)`,
-			userID, secret, secretType, metadata)
+			VALUES (:user_id, :secret, :secret_type, :metadata)`
+
+		insertParams := map[string]any{
+			"user_id":     userID,
+			"secret":      secret,
+			"secret_type": secretType,
+			"metadata":    metadata,
+		}
+
+		_, err = d.db.NamedExec(insertQuery, insertParams)
 		return err
 	}
 
@@ -349,48 +426,86 @@ func (d *DatabaseStorage) upsertCredential(userID int64, secret, secretType, met
 
 // --- Verification Token Methods ---
 func (d *DatabaseStorage) SetVerificationToken(username, token string, expiresAt int64) error {
-	_, err := d.db.Exec(`INSERT INTO verification_tokens (username, token, expires_at, used) VALUES (?, ?, ?, ?)`,
-		username, token, expiresAt, false)
+	query := `INSERT INTO verification_tokens (username, token, expires_at, used) VALUES (:username, :token, :expires_at, :used)`
+	params := map[string]any{
+		"username":   username,
+		"token":      token,
+		"expires_at": expiresAt,
+		"used":       d.convertBoolForDB(false),
+	}
+	_, err := d.db.NamedExec(query, params)
 	return err
 }
 
 func (d *DatabaseStorage) VerifyToken(username, token string) (bool, error) {
-	var used bool
-	var expiresAt int64
-	err := d.db.QueryRow(`SELECT used, expires_at FROM verification_tokens WHERE username = ? AND token = ?`,
-		username, token).Scan(&used, &expiresAt)
+	query := `SELECT used, expires_at FROM verification_tokens WHERE username = :username AND token = :token`
+	params := map[string]any{
+		"username": username,
+		"token":    token,
+	}
+
+	var result struct {
+		Used      any   `db:"used"`
+		ExpiresAt int64 `db:"expires_at"`
+	}
+
+	err := d.db.NamedGet(&result, query, params)
 	if err != nil {
 		return false, err
 	}
 
-	if used || expiresAt < time.Now().Unix() {
+	used := d.convertBoolFromDB(result.Used)
+	if used || result.ExpiresAt < time.Now().Unix() {
 		return false, nil
 	}
 
-	_, err = d.db.Exec(`UPDATE verification_tokens SET used = ? WHERE username = ? AND token = ?`,
-		true, username, token)
+	updateQuery := `UPDATE verification_tokens SET used = :used WHERE username = :username AND token = :token`
+	updateParams := map[string]any{
+		"used":     d.convertBoolForDB(true),
+		"username": username,
+		"token":    token,
+	}
+
+	_, err = d.db.NamedExec(updateQuery, updateParams)
 	return err == nil, err
 }
 
 // --- Pending Registration Methods ---
 func (d *DatabaseStorage) CreatePendingRegistration(username, passwordHash, loginType string) error {
-	_, err := d.db.Exec(`INSERT INTO pending_registrations (username, password_hash, login_type) VALUES (?, ?, ?)`,
-		username, passwordHash, loginType)
+	query := `INSERT INTO pending_registrations (username, password_hash, login_type) VALUES (:username, :password_hash, :login_type)`
+	params := map[string]any{
+		"username":      username,
+		"password_hash": passwordHash,
+		"login_type":    loginType,
+	}
+	_, err := d.db.NamedExec(query, params)
 	return err
 }
 
 func (d *DatabaseStorage) GetPendingRegistration(username string) (string, string, error) {
-	var passwordHash, loginType string
-	err := d.db.QueryRow(`SELECT password_hash, login_type FROM pending_registrations WHERE username = ?`,
-		username).Scan(&passwordHash, &loginType)
+	query := `SELECT password_hash, login_type FROM pending_registrations WHERE username = :username`
+	params := map[string]any{
+		"username": username,
+	}
+
+	var result struct {
+		PasswordHash string `db:"password_hash"`
+		LoginType    string `db:"login_type"`
+	}
+
+	err := d.db.NamedGet(&result, query, params)
 	if err != nil {
 		return "", "", err
 	}
-	return passwordHash, loginType, nil
+	return result.PasswordHash, result.LoginType, nil
 }
 
 func (d *DatabaseStorage) DeletePendingRegistration(username string) error {
-	_, err := d.db.Exec(`DELETE FROM pending_registrations WHERE username = ?`, username)
+	query := `DELETE FROM pending_registrations WHERE username = :username`
+	params := map[string]any{
+		"username": username,
+	}
+	_, err := d.db.NamedExec(query, params)
 	return err
 }
 
@@ -400,22 +515,58 @@ func (d *DatabaseStorage) SetUserInfo(pubHex string, info models.UserInfo) error
 }
 
 func (d *DatabaseStorage) GetUserInfo(pubHex string) (models.UserInfo, error) {
-	var info models.UserInfo
-	err := d.db.QueryRow(`SELECT user_id, username, login_type, mfa_enabled FROM users WHERE pub_hex = ?`,
-		pubHex).Scan(&info.UserID, &info.Username, &info.LoginType, &info.MFAEnabled)
+	query := `SELECT user_id, username, login_type, mfa_enabled FROM users WHERE pub_hex = :pub_hex`
+	params := map[string]any{
+		"pub_hex": pubHex,
+	}
+
+	var rawResult struct {
+		UserID     int64  `db:"user_id"`
+		Username   string `db:"username"`
+		LoginType  string `db:"login_type"`
+		MFAEnabled any    `db:"mfa_enabled"`
+	}
+
+	err := d.db.NamedGet(&rawResult, query, params)
 	if err != nil {
 		return models.UserInfo{}, err
 	}
+
+	info := models.UserInfo{
+		UserID:     rawResult.UserID,
+		Username:   rawResult.Username,
+		LoginType:  rawResult.LoginType,
+		MFAEnabled: d.convertBoolFromDB(rawResult.MFAEnabled),
+	}
+
 	return info, nil
 }
 
 func (d *DatabaseStorage) GetUserInfoByUsername(username string) (models.UserInfo, error) {
-	var info models.UserInfo
-	err := d.db.QueryRow(`SELECT user_id, username, login_type, mfa_enabled FROM users WHERE username = ?`,
-		username).Scan(&info.UserID, &info.Username, &info.LoginType, &info.MFAEnabled)
+	query := `SELECT user_id, username, login_type, mfa_enabled FROM users WHERE username = :username`
+	params := map[string]any{
+		"username": username,
+	}
+
+	var rawResult struct {
+		UserID     int64  `db:"user_id"`
+		Username   string `db:"username"`
+		LoginType  string `db:"login_type"`
+		MFAEnabled any    `db:"mfa_enabled"`
+	}
+
+	err := d.db.NamedGet(&rawResult, query, params)
 	if err != nil {
 		return models.UserInfo{}, err
 	}
+
+	info := models.UserInfo{
+		UserID:     rawResult.UserID,
+		Username:   rawResult.Username,
+		LoginType:  rawResult.LoginType,
+		MFAEnabled: d.convertBoolFromDB(rawResult.MFAEnabled),
+	}
+
 	return info, nil
 }
 
@@ -424,8 +575,14 @@ func (d *DatabaseStorage) SetUserSecret(userID int64, secret string) error {
 }
 
 func (d *DatabaseStorage) GetUserSecret(userID int64) (string, error) {
+	query := `SELECT secret FROM credentials WHERE user_id = :user_id AND secret_type = :secret_type`
+	params := map[string]any{
+		"user_id":     userID,
+		"secret_type": "password",
+	}
+
 	var secret string
-	err := d.db.Get(&secret, `SELECT secret FROM credentials WHERE user_id = ? AND secret_type = 'password'`, userID)
+	err := d.db.NamedGet(&secret, query, params)
 	if err != nil {
 		return "", err
 	}
@@ -441,8 +598,14 @@ func (d *DatabaseStorage) SetUserPublicKey(userID int64, pubKeyX, pubKeyY string
 }
 
 func (d *DatabaseStorage) GetUserPublicKey(userID int64) (map[string]string, error) {
+	query := `SELECT secret FROM credentials WHERE user_id = :user_id AND secret_type = :secret_type`
+	params := map[string]any{
+		"user_id":     userID,
+		"secret_type": "public_key",
+	}
+
 	var secret string
-	err := d.db.Get(&secret, `SELECT secret FROM credentials WHERE user_id = ? AND secret_type = 'public_key'`, userID)
+	err := d.db.NamedGet(&secret, query, params)
 	if err != nil {
 		return nil, err
 	}
@@ -460,39 +623,61 @@ func (d *DatabaseStorage) SetUserMFA(userID int64, secret string, backupCodes []
 }
 
 func (d *DatabaseStorage) GetUserMFA(userID int64) (string, []string, error) {
-	var secret, metadata string
-	err := d.db.QueryRow(`SELECT secret, COALESCE(metadata, '') FROM credentials WHERE user_id = ? AND secret_type = 'mfa'`,
-		userID).Scan(&secret, &metadata)
+	query := `SELECT secret, COALESCE(metadata, '') as metadata FROM credentials WHERE user_id = :user_id AND secret_type = :secret_type`
+	params := map[string]any{
+		"user_id":     userID,
+		"secret_type": "mfa",
+	}
+
+	var result struct {
+		Secret   string `db:"secret"`
+		Metadata string `db:"metadata"`
+	}
+
+	err := d.db.NamedGet(&result, query, params)
 	if err != nil {
 		return "", nil, err
 	}
 
 	var backupCodes []string
-	if metadata != "" {
-		json.Unmarshal([]byte(metadata), &backupCodes)
+	if result.Metadata != "" {
+		json.Unmarshal([]byte(result.Metadata), &backupCodes)
 	}
-	return secret, backupCodes, nil
+	return result.Secret, backupCodes, nil
 }
 
 func (d *DatabaseStorage) EnableMFA(userID int64) error {
-	_, err := d.db.Exec(`UPDATE users SET mfa_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`,
-		true, userID)
+	query := `UPDATE users SET mfa_enabled = :mfa_enabled, updated_at = CURRENT_TIMESTAMP WHERE user_id = :user_id`
+	params := map[string]any{
+		"mfa_enabled": d.convertBoolForDB(true),
+		"user_id":     userID,
+	}
+	_, err := d.db.NamedExec(query, params)
 	return err
 }
 
 func (d *DatabaseStorage) DisableMFA(userID int64) error {
-	_, err := d.db.Exec(`UPDATE users SET mfa_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?`,
-		false, userID)
+	query := `UPDATE users SET mfa_enabled = :mfa_enabled, updated_at = CURRENT_TIMESTAMP WHERE user_id = :user_id`
+	params := map[string]any{
+		"mfa_enabled": d.convertBoolForDB(false),
+		"user_id":     userID,
+	}
+	_, err := d.db.NamedExec(query, params)
 	return err
 }
 
 func (d *DatabaseStorage) IsUserMFAEnabled(userID int64) (bool, error) {
-	var mfaEnabled bool
-	err := d.db.QueryRow(`SELECT mfa_enabled FROM users WHERE user_id = ?`, userID).Scan(&mfaEnabled)
+	query := `SELECT mfa_enabled FROM users WHERE user_id = :user_id`
+	params := map[string]any{
+		"user_id": userID,
+	}
+
+	var mfaEnabled any
+	err := d.db.NamedGet(&mfaEnabled, query, params)
 	if err != nil {
 		return false, err
 	}
-	return mfaEnabled, nil
+	return d.convertBoolFromDB(mfaEnabled), nil
 }
 
 func (d *DatabaseStorage) ValidateBackupCode(userID int64, code string) error {
