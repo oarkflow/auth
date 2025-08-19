@@ -38,8 +38,10 @@ func (p *Plugin) Register() {
 	manager.SendNotification = p.SendNotification
 	manager.LoginSuccessURL = p.LoginSuccessURL
 	objects.Manager = manager
-	routes.Setup(p.Prefix, p.App)
-	routes.ProtectedRoutes(p.App.Group(p.Prefix, middlewares.Verify))
+	if p.App != nil {
+		routes.Setup(p.Prefix, p.App)
+		routes.ProtectedRoutes(p.App.Group(p.Prefix, middlewares.Verify))
+	}
 }
 
 func (p *Plugin) Init() {
