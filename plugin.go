@@ -15,6 +15,8 @@ import (
 	"github.com/oarkflow/auth/pkg/objects"
 	"github.com/oarkflow/auth/pkg/storage"
 	"github.com/oarkflow/auth/pkg/utils"
+	"github.com/oarkflow/squealx"
+	"github.com/oarkflow/squealx/drivers/sqlite"
 )
 
 //go:embed auth
@@ -25,12 +27,25 @@ type Plugin struct {
 	Prefix           string
 	LoginSuccessURL  string
 	Assets           embed.FS
+	DB               *squealx.DB
 	SendNotification libs.NotificationHandler
 }
 
 func (p *Plugin) Register() {
+	var db *squealx.DB
 	cfg := libs.LoadConfig()
-	vault, err := storage.NewDatabaseStorage(cfg.DB)
+	if p.DB != nil {
+		db = p.DB
+	} else if cfg.DB != nil {
+		db = cfg.DB
+	} else {
+		sqliteDB, err := sqlite.Open("vault.db", "sqlite")
+		if err != nil {
+			log.Fatalf("failed to open database: %v", err)
+		}
+		db = sqliteDB
+	}
+	vault, err := storage.NewDatabaseStorage(db)
 	if err != nil {
 		log.Fatalf("Failed to initialize DatabaseVaultStorage: %v", err)
 	}

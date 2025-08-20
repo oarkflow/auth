@@ -1,12 +1,10 @@
 package libs
 
 import (
-	"log"
 	"strings"
 	"time"
 
 	"github.com/oarkflow/squealx"
-	"github.com/oarkflow/squealx/drivers/sqlite"
 
 	"github.com/oarkflow/auth/pkg/objects"
 )
@@ -55,12 +53,8 @@ func LoadConfig() *Config {
 		RequireSpecial: true,
 		MaxAge:         90 * 24 * time.Hour,
 	}
-	db, err := sqlite.Open("vault.db", "sqlite")
-	if err != nil {
-		log.Fatalf("failed to open database: %v", err)
-	}
+
 	return &Config{
-		DB:                    db,
 		Secret:                []byte(secret),
 		ProofTimeout:          pt,
 		CORSOrigins:           corsOrigins,
