@@ -15,6 +15,7 @@ import (
 	"github.com/oarkflow/hash"
 	"github.com/oarkflow/paseto/token"
 	"github.com/oarkflow/xid/wuid"
+	"github.com/sujit-baniya/flash"
 
 	"github.com/oarkflow/auth/pkg/http/requests"
 	"github.com/oarkflow/auth/pkg/http/responses"
@@ -86,12 +87,6 @@ func UserInfoPage(c *fiber.Ctx) error {
 			"expiresAt": int64(exp_claim),
 			"timeLeft":  int64(exp_claim) - time.Now().Unix(),
 		},
-	})
-}
-
-func LogoutPage(c *fiber.Ctx) error {
-	return responses.Render(c, utils.LogoutTemplate, fiber.Map{
-		"Title": "Logout page",
 	})
 }
 
@@ -415,29 +410,25 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 			"There was an internal error during login. Please try again.",
 			fmt.Sprintf("PASETO token encryption failed: %v", err), utils.LoginURI)
 	}
-	if userInfo, exists := objects.Manager.LookupUserByUsername(username); exists {
-		objects.Manager.LogoutTracker().ClearUserLogout(userInfo.UserID)
-	}
+
+	// Clear logout status for this user after successful authentication
+	objects.Manager.LogoutTracker().ClearUserLogout(userInfo.UserID)
 	enableHTTPS := objects.Config.GetBool("app.https")
 	appEnv := objects.Config.GetString("app.env")
+
 	sessionName := objects.Config.GetString("auth.session_name")
+	if sessionName == "" {
+		sessionName = utils.DefaultSessionName
+	}
 	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr, int(sessionTimeout.Seconds())))
 	manager, ok := objects.Manager.(*libs.Manager)
 	uri := utils.AppURI
 	if ok && manager.LoginSuccessURL != "" {
 		uri = manager.LoginSuccessURL
 	}
-	// Check for last_visited_uri cookie
-	lastVisited := c.Cookies("last_visited_uri")
+	data := flash.Get(c)
+	lastVisited, ok := data["last_visited_uri"].(string)
 	if lastVisited != "" {
-		// Clear the cookie
-		c.Cookie(&fiber.Cookie{
-			Name:     "last_visited_uri",
-			Value:    "",
-			Path:     "/",
-			HTTPOnly: true,
-			Expires:  time.Unix(0, 0),
-		})
 		return c.Redirect(lastVisited, fiber.StatusSeeOther)
 	}
 	return c.Redirect(uri, fiber.StatusSeeOther)
@@ -602,26 +593,25 @@ func PostSecureLogin(c *fiber.Ctx) error {
 			fmt.Sprintf("PASETO token encryption failed: %v", err), utils.LoginURI)
 	}
 
+	// Clear logout status for this user after successful authentication
+	objects.Manager.LogoutTracker().ClearUserLogout(info.UserID)
+
 	enableHTTPS := objects.Config.GetBool("app.https")
 	appEnv := objects.Config.GetString("app.env")
 	sessionName := objects.Config.GetString("auth.session_name")
-	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr))
+	if sessionName == "" {
+		sessionName = utils.DefaultSessionName
+	}
+	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr, int(sessionTimeout.Seconds())))
 	manager, ok := objects.Manager.(*libs.Manager)
 	uri := utils.AppURI
 	if ok && manager.LoginSuccessURL != "" {
 		uri = manager.LoginSuccessURL
 	}
 	// Check for last_visited_uri cookie
-	lastVisited := c.Cookies("last_visited_uri")
+	data := flash.Get(c)
+	lastVisited, ok := data["last_visited_uri"].(string)
 	if lastVisited != "" {
-		// Clear the cookie
-		c.Cookie(&fiber.Cookie{
-			Name:     "last_visited_uri",
-			Value:    "",
-			Path:     "/",
-			HTTPOnly: true,
-			Expires:  time.Unix(0, 0),
-		})
 		return c.Redirect(lastVisited, fiber.StatusSeeOther)
 	}
 	return c.Redirect(uri, fiber.StatusSeeOther)
@@ -629,7 +619,11 @@ func PostSecureLogin(c *fiber.Ctx) error {
 
 func PostLogout(c *fiber.Ctx) error {
 	tokenStr := ""
-	cookie := c.Cookies("session_token")
+	sessionName := objects.Config.GetString("auth.session_name")
+	if sessionName == "" {
+		sessionName = utils.DefaultSessionName
+	}
+	cookie := c.Cookies(sessionName)
 	if cookie != "" {
 		tokenStr = cookie
 	} else if c.Get("Authorization") != "" {
@@ -656,9 +650,7 @@ func PostLogout(c *fiber.Ctx) error {
 			exp = int64(expf)
 		}
 	}
-	objects.Manager.CleanupExpiredTokens()
-	objects.Manager.AddTokenToDenylist(tokenStr, exp)
-
+	flash.Get(c)
 	// CRITICAL SECURITY: Also logout from proof-based authentication
 	// Extract user ID from token to invalidate proof-based access
 	if sub, ok := decTok.Claims["sub"].(string); ok {
@@ -671,14 +663,12 @@ func PostLogout(c *fiber.Ctx) error {
 
 	enableHTTPS := objects.Config.GetBool("app.https")
 	appEnv := objects.Config.GetString("app.env")
-	sessionName := objects.Config.GetString("auth.session_name")
 	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr, -1))
-
 	// Add cache control headers to prevent browser caching
 	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	c.Set("Pragma", "no-cache")
 	c.Set("Expires", "0")
-	return c.Redirect(utils.LogoutURI+"?success=1", http.StatusSeeOther)
+	return c.Redirect(utils.LoginURI, http.StatusSeeOther)
 }
 
 func renderErrorPage(c *fiber.Ctx, statusCode int, title, message, description, technical, retryURL string) error {

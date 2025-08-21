@@ -13,9 +13,6 @@ type SecurityManager interface {
 }
 
 type Manager interface {
-	CleanupExpiredTokens()
-	IsTokenDenylisted(token string) bool
-	AddTokenToDenylist(token string, exp int64)
 	CleanupExpiredNonces()
 	IsNonceReplayed(nonce string) bool
 	SetVerificationToken(username, token string)

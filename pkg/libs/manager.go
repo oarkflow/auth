@@ -139,8 +139,6 @@ type Manager struct {
 	UserRegistryMu    sync.RWMutex
 	NonceCache        map[string]int64
 	NonceCacheMu      sync.Mutex
-	LogoutDenylist    map[string]int64
-	LogoutDenylistMu  sync.Mutex
 	Curve             elliptic.Curve
 	UserLogoutTracker contracts.LogoutTracker
 
@@ -189,7 +187,6 @@ func NewManager(vaultStorage contracts.Storage, configs ...*Config) *Manager {
 		UserLogoutTracker:    NewUserLogoutTracker(),
 		UserRegistry:         make(map[string]ecdsa.PublicKey),
 		NonceCache:           make(map[string]int64),
-		LogoutDenylist:       make(map[string]int64),
 		Curve:                elliptic.P256(),
 		VerificationTokens:   make(map[string]string),
 		VerificationStatus:   make(map[string]bool),
@@ -197,33 +194,6 @@ func NewManager(vaultStorage contracts.Storage, configs ...*Config) *Manager {
 		security:             NewSecurityManager(),
 		DisableRoutesHandler: cfg.DisableRoutesHandler,
 	}
-}
-
-// CleanupExpiredTokens removes expired tokens from the logout denylist
-func (m *Manager) CleanupExpiredTokens() {
-	m.LogoutDenylistMu.Lock()
-	defer m.LogoutDenylistMu.Unlock()
-	now := time.Now().Unix()
-	for token, exp := range m.LogoutDenylist {
-		if exp < now {
-			delete(m.LogoutDenylist, token)
-		}
-	}
-}
-
-// IsTokenDenylisted checks if a token is in the logout denylist
-func (m *Manager) IsTokenDenylisted(token string) bool {
-	m.LogoutDenylistMu.Lock()
-	defer m.LogoutDenylistMu.Unlock()
-	_, found := m.LogoutDenylist[token]
-	return found
-}
-
-// AddTokenToDenylist adds a token to the logout denylist
-func (m *Manager) AddTokenToDenylist(token string, exp int64) {
-	m.LogoutDenylistMu.Lock()
-	defer m.LogoutDenylistMu.Unlock()
-	m.LogoutDenylist[token] = exp
 }
 
 // CleanupExpiredNonces removes expired nonces from the cache

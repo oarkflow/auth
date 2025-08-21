@@ -1,10 +1,12 @@
 package middlewares
 
 import (
+	"net/url"
 	"path"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/sujit-baniya/flash"
 
 	"github.com/oarkflow/paseto/token"
 
@@ -16,12 +18,7 @@ func SendError(c *fiber.Ctx, status int, message string) error {
 	lastURI := c.OriginalURL()
 	// Only store last visited URI if it's not a static asset
 	if !isAssetURI(lastURI) {
-		c.Cookie(&fiber.Cookie{
-			Name:     "last_visited_uri",
-			Value:    lastURI,
-			Path:     "/",
-			HTTPOnly: true,
-		})
+		c = flash.WithData(c, fiber.Map{"last_visited_uri": lastURI})
 	}
 	contentType := c.Get("Content-Type")
 	if contentType == fiber.MIMEApplicationJSON || contentType == fiber.MIMEApplicationJSONCharsetUTF8 {
@@ -31,7 +28,7 @@ func SendError(c *fiber.Ctx, status int, message string) error {
 			"status":  status,
 		})
 	}
-	return c.Status(status).Redirect("/login")
+	return c.Status(status).Redirect("/login?msg=" + url.QueryEscape(message))
 }
 
 // Helper to check if URI is an asset
@@ -42,7 +39,11 @@ func isAssetURI(uri string) bool {
 
 func Verify(c *fiber.Ctx) error {
 	tokenStr := ""
-	cookie := c.Cookies("session_token")
+	sessionName := objects.Config.GetString("auth.session_name")
+	if sessionName == "" {
+		sessionName = utils.DefaultSessionName
+	}
+	cookie := c.Cookies(sessionName)
 	if cookie != "" {
 		tokenStr = cookie
 	} else {
@@ -55,11 +56,6 @@ func Verify(c *fiber.Ctx) error {
 	}
 	if tokenStr == "" {
 		return SendError(c, fiber.StatusUnauthorized, "authentication required")
-	}
-	objects.Manager.CleanupExpiredTokens()
-
-	if objects.Manager.IsTokenDenylisted(tokenStr) {
-		return SendError(c, fiber.StatusUnauthorized, "session expired")
 	}
 	secret := objects.Config.GetString("auth.secret")
 	decTok, err := token.DecryptToken(tokenStr, []byte(secret))
@@ -77,6 +73,13 @@ func Verify(c *fiber.Ctx) error {
 	if !exists {
 		return SendError(c, fiber.StatusUnauthorized, "user not found")
 	}
+
+	// Check if user has been logged out after token was issued
+	iat, _ := claims["iat"].(float64)
+	if iat > 0 && objects.Manager.LogoutTracker().IsUserLoggedOut(userInfo.UserID, int64(iat)) {
+		return SendError(c, fiber.StatusUnauthorized, "session loggout")
+	}
+
 	c.Locals("userInfo", userInfo)
 	c.Locals("user_id", userInfo.UserID)
 	c.Locals("user", claims["sub"])

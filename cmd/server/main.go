@@ -18,7 +18,6 @@ import (
 	"github.com/oarkflow/auth/pkg/config"
 	"github.com/oarkflow/auth/pkg/libs"
 	"github.com/oarkflow/auth/pkg/objects"
-	"github.com/oarkflow/auth/pkg/utils"
 )
 
 func main() {
@@ -26,10 +25,7 @@ func main() {
 	cfg := config.Config{}
 	cfg.Load()
 	app := fiber.New()
-	authPlugin := v2.NewPlugin("/", "https://google.com", libs.NotificationHandler{}, app)
-	authPlugin.DisabledRoutesHandler = func() []string {
-		return []string{utils.AppURI}
-	}
+	authPlugin := v2.NewPlugin("/", "/app", libs.NotificationHandler{}, app)
 	authPlugin.Register()
 	if err := app.Listen(":3000"); err != nil {
 		log.Fatal(err)

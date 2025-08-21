@@ -64,3 +64,5 @@ func GetURIs() map[string]string {
 		"MFABackupCodes": MFABackupCodesURI,
 	}
 }
+
+var DefaultSessionName = "session_name"

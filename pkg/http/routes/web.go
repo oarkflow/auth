@@ -32,7 +32,6 @@ func Setup(prefix string, router fiber.Router) {
 
 func ProtectedRoutes(route fiber.Router) {
 	DisabledRoutes(route, "Get", utils.AppURI, handlers.DashboardPage)
-	DisabledRoutes(route, "Get", utils.LogoutURI, handlers.LogoutPage)
 	DisabledRoutes(route, "Post", utils.LogoutURI, handlers.PostLogout)
 	DisabledRoutes(route, "Get", utils.UserInfoURI, handlers.UserInfoPage)
 	DisabledRoutes(route, "Get", utils.MFASetupURI, handlers.MFASetupPage)
