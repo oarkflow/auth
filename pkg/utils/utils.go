@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	expDuration       = 15 * time.Minute
 	passwordMinLength = 8
 )
 
@@ -177,11 +176,12 @@ func GetCookie(enableHTTPS bool, env, key, val string, maxAges ...int) *fiber.Co
 }
 
 // --- Paseto Claims Helper ---
-func GetClaims(sub, nonce string, ts int64) map[string]any {
+func GetClaims(sub, nonce string, now, exp int64, ts int64, ip string) map[string]any {
 	return map[string]any{
 		"sub": sub,
-		"iat": time.Now().Unix(),
-		"exp": time.Now().Add(expDuration).Unix(),
+		"iat": now,
+		"exp": exp,
+		"ip":  ip,
 		"vc": map[string]any{
 			"pubKey": sub,
 			"nonce":  nonce,

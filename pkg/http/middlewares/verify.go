@@ -9,6 +9,7 @@ import (
 	"github.com/oarkflow/paseto/token"
 
 	"github.com/oarkflow/auth/pkg/objects"
+	"github.com/oarkflow/auth/pkg/utils"
 )
 
 func SendError(c *fiber.Ctx, status int, message string) error {
@@ -66,6 +67,11 @@ func Verify(c *fiber.Ctx) error {
 		return SendError(c, fiber.StatusUnauthorized, "invalid session")
 	}
 	claims := decTok.Claims
+	claimIP, _ := claims["ip"].(string)
+	currentIP := utils.GetClientIP(c)
+	if isNotLocalhost(claimIP) && claimIP != currentIP {
+		return SendError(c, fiber.StatusUnauthorized, "IP mismatch")
+	}
 	pubHex, _ := claims["sub"].(string)
 	userInfo, exists := objects.Manager.LookupUserByPubHex(pubHex)
 	if !exists {
@@ -79,4 +85,17 @@ func Verify(c *fiber.Ctx) error {
 	c.Set("Pragma", "no-cache")
 	c.Set("Expires", "0")
 	return c.Next()
+}
+
+func isNotLocalhost(ip string) bool {
+	if ip == "" {
+		return true
+	}
+	if strings.HasPrefix(ip, "127.") || strings.HasPrefix(ip, "::1") || strings.HasPrefix(ip, "localhost") {
+		return false
+	}
+	if strings.HasPrefix(ip, "192.168.") || strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "172.") {
+		return false
+	}
+	return true
 }

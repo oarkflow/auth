@@ -399,9 +399,11 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 
 	pubHex := pubKeyX + ":" + pubKeyY
 	nonce, ts := utils.GetNonceWithTimestamp()
-
+	now := time.Now().Unix()
+	exp := time.Now().Add(sessionTimeout).Unix()
+	ip := utils.GetClientIP(c)
 	// Create token claims
-	claims := utils.GetClaims(pubHex, nonce, ts)
+	claims := utils.GetClaims(pubHex, nonce, now, exp, ts, ip)
 	t := token.CreateToken(sessionTimeout, token.AlgEncrypt)
 	_ = token.RegisterClaims(t, claims)
 
@@ -583,7 +585,12 @@ func PostSecureLogin(c *fiber.Ctx) error {
 
 	// Phase 1: Clear failed login attempts on successful authentication
 	objects.Manager.Security().ClearLoginAttempts(loginIdentifier)
-	claims := utils.GetClaims(pubHex, nonce, ts)
+
+	now := time.Now().Unix()
+	exp := time.Now().Add(sessionTimeout).Unix()
+	// Create token claims
+	ip := utils.GetClientIP(c)
+	claims := utils.GetClaims(pubHex, nonce, now, exp, ts, ip)
 	t := token.CreateToken(sessionTimeout, token.AlgEncrypt)
 	_ = token.RegisterClaims(t, claims)
 	secret := objects.Config.GetString("auth.secret")
