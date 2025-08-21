@@ -9,6 +9,14 @@ import (
 )
 
 func SendError(c *fiber.Ctx, status int, message string) error {
+	// Store last visited URI in a cookie for redirect after login
+	lastURI := c.OriginalURL()
+	c.Cookie(&fiber.Cookie{
+		Name:     "last_visited_uri",
+		Value:    lastURI,
+		Path:     "/",
+		HTTPOnly: true,
+	})
 	contentType := c.Get("Content-Type")
 	if contentType == fiber.MIMEApplicationJSON || contentType == fiber.MIMEApplicationJSONCharsetUTF8 {
 		return c.Status(status).JSON(fiber.Map{

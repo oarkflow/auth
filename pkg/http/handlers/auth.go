@@ -427,6 +427,19 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 	if ok && manager.LoginSuccessURL != "" {
 		uri = manager.LoginSuccessURL
 	}
+	// Check for last_visited_uri cookie
+	lastVisited := c.Cookies("last_visited_uri")
+	if lastVisited != "" {
+		// Clear the cookie
+		c.Cookie(&fiber.Cookie{
+			Name:     "last_visited_uri",
+			Value:    "",
+			Path:     "/",
+			HTTPOnly: true,
+			Expires:  time.Unix(0, 0),
+		})
+		return c.Redirect(lastVisited, fiber.StatusSeeOther)
+	}
 	return c.Redirect(uri, fiber.StatusSeeOther)
 }
 
@@ -591,6 +604,19 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	uri := utils.AppURI
 	if ok && manager.LoginSuccessURL != "" {
 		uri = manager.LoginSuccessURL
+	}
+	// Check for last_visited_uri cookie
+	lastVisited := c.Cookies("last_visited_uri")
+	if lastVisited != "" {
+		// Clear the cookie
+		c.Cookie(&fiber.Cookie{
+			Name:     "last_visited_uri",
+			Value:    "",
+			Path:     "/",
+			HTTPOnly: true,
+			Expires:  time.Unix(0, 0),
+		})
+		return c.Redirect(lastVisited, fiber.StatusSeeOther)
 	}
 	return c.Redirect(uri, fiber.StatusSeeOther)
 }
