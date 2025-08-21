@@ -25,7 +25,6 @@ import (
 )
 
 const (
-	expDuration         = 15 * time.Minute
 	loginCooldownPeriod = 15 * time.Minute
 )
 
@@ -333,6 +332,7 @@ func PostRegister(c *fiber.Ctx) error {
 }
 
 func PostSimpleLogin(c *fiber.Ctx) error {
+	sessionTimeout := objects.Config.GetDuration("auth.session_timeout", "24h")
 	var req requests.SimpleLoginRequest
 	if err := c.BodyParser(&req); err != nil {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Form Data",
@@ -402,9 +402,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 
 	// Create token claims
 	claims := utils.GetClaims(pubHex, nonce, ts)
-
-	// Create PASETO token
-	t := token.CreateToken(expDuration, token.AlgEncrypt)
+	t := token.CreateToken(sessionTimeout, token.AlgEncrypt)
 	_ = token.RegisterClaims(t, claims)
 
 	secret := objects.Config.GetString("auth.secret")
@@ -421,7 +419,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 	enableHTTPS := objects.Config.GetBool("app.https")
 	appEnv := objects.Config.GetString("app.env")
 	sessionName := objects.Config.GetString("auth.session_name")
-	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr))
+	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr, int(sessionTimeout.Seconds())))
 	manager, ok := objects.Manager.(*libs.Manager)
 	uri := utils.AppURI
 	if ok && manager.LoginSuccessURL != "" {
@@ -444,6 +442,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 }
 
 func PostSecureLogin(c *fiber.Ctx) error {
+	sessionTimeout := objects.Config.GetDuration("auth.session_timeout", "24h")
 	var req requests.SecuredLoginRequest
 	if err := c.BodyParser(&req); err != nil {
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Form Data",
@@ -585,13 +584,13 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	// Phase 1: Clear failed login attempts on successful authentication
 	objects.Manager.Security().ClearLoginAttempts(loginIdentifier)
 	claims := utils.GetClaims(pubHex, nonce, ts)
-	t := token.CreateToken(expDuration, token.AlgEncrypt)
+	t := token.CreateToken(sessionTimeout, token.AlgEncrypt)
 	_ = token.RegisterClaims(t, claims)
 	secret := objects.Config.GetString("auth.secret")
 	tokenStr, err := token.EncryptToken(t, []byte(secret))
 	if err != nil {
-		return renderErrorPage(c, http.StatusInternalServerError, "Token Generation Failed",
-			"Failed to generate authentication token.",
+		return renderErrorPage(c, http.StatusInternalServerError, "Login Token Error",
+			"Failed to create authentication token.",
 			"There was an internal error during login. Please try again.",
 			fmt.Sprintf("PASETO token encryption failed: %v", err), utils.LoginURI)
 	}

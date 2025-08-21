@@ -22,7 +22,7 @@ func (a *Config) Load() {
 		"session_name":         objects.Config.Env("AUTH_SESSION_NAME", "session_token"),
 		"session_timeout":      objects.Config.Env("AUTH_SESSION_TIMEOUT", "24h"),
 
-		"proof_timeout": objects.Config.Env("AUTH_PROOF_TIMEOUT", "5m"),
+		"proof_timeout": objects.Config.Env("AUTH_PROOF_TIMEOUT", "24m"),
 
 		"cors_origin":        objects.Config.Env("AUTH_CORS_ORIGIN", "*"),
 		"max_login_attempts": objects.Config.Env("AUTH_MAX_LOGIN_ATTEMPTS", 5),

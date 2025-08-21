@@ -35,7 +35,7 @@ type PasswordPolicyConfig struct {
 // --- Configuration Functions ---
 func LoadConfig() *Config {
 	secret := objects.Config.GetString("auth.secret")
-	pt := objects.Config.GetDuration("auth.proof_timeout", "5s")
+	pt := objects.Config.GetDuration("auth.proof_timeout", "5m")
 	// Production-ready security configurations
 	corsOrigins := strings.Split(objects.Config.GetString("auth.cors_origins"), ",")
 	sessionTimeout := objects.Config.GetDuration("auth.session_timeout", "3600s")
