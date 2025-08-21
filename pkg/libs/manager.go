@@ -154,9 +154,9 @@ type Manager struct {
 	PasswordResetMu     sync.RWMutex
 
 	// Phase 1: Security Manager
-	security contracts.SecurityManager
-
-	SendNotification NotificationHandler
+	security             contracts.SecurityManager
+	DisableRoutesHandler func() []string
+	SendNotification     NotificationHandler
 }
 
 func (m *Manager) Vault() contracts.Storage {
@@ -171,23 +171,31 @@ func (m *Manager) LogoutTracker() contracts.LogoutTracker {
 	return m.UserLogoutTracker
 }
 
+func (m *Manager) DisabledRoutes() []string {
+	if m.DisableRoutesHandler == nil {
+		return []string{}
+	}
+	return m.DisableRoutesHandler()
+}
+
 func NewManager(vaultStorage contracts.Storage, configs ...*Config) *Manager {
 	var cfg *Config
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
 	return &Manager{
-		vault:               vaultStorage,
-		Config:              cfg,
-		UserLogoutTracker:   NewUserLogoutTracker(),
-		UserRegistry:        make(map[string]ecdsa.PublicKey),
-		NonceCache:          make(map[string]int64),
-		LogoutDenylist:      make(map[string]int64),
-		Curve:               elliptic.P256(),
-		VerificationTokens:  make(map[string]string),
-		VerificationStatus:  make(map[string]bool),
-		PasswordResetTokens: make(map[string]models.PasswordResetData),
-		security:            NewSecurityManager(),
+		vault:                vaultStorage,
+		Config:               cfg,
+		UserLogoutTracker:    NewUserLogoutTracker(),
+		UserRegistry:         make(map[string]ecdsa.PublicKey),
+		NonceCache:           make(map[string]int64),
+		LogoutDenylist:       make(map[string]int64),
+		Curve:                elliptic.P256(),
+		VerificationTokens:   make(map[string]string),
+		VerificationStatus:   make(map[string]bool),
+		PasswordResetTokens:  make(map[string]models.PasswordResetData),
+		security:             NewSecurityManager(),
+		DisableRoutesHandler: cfg.DisableRoutesHandler,
 	}
 }
 

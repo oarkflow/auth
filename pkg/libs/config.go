@@ -20,6 +20,7 @@ type Config struct {
 	RateLimitWindow       time.Duration
 	EnableSecurityHeaders bool
 	EnableAuditLogging    bool
+	DisableRoutesHandler  func() []string
 	PasswordPolicy        PasswordPolicyConfig
 }
 

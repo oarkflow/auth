@@ -28,6 +28,7 @@ type Manager interface {
 	LookupUserByUsername(username string) (models.UserInfo, bool)
 	LookupUserByPubHex(pubHex string) (models.UserInfo, bool)
 	GetPublicKeyByUserID(userID int64) (string, string, error)
+	DisabledRoutes() []string
 	Vault() Storage
 	Security() SecurityManager
 	LogoutTracker() LogoutTracker

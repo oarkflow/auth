@@ -23,12 +23,13 @@ import (
 var Assets embed.FS
 
 type Plugin struct {
-	App              *fiber.App
-	Prefix           string
-	LoginSuccessURL  string
-	Assets           embed.FS
-	DB               *squealx.DB
-	SendNotification libs.NotificationHandler
+	App                   *fiber.App
+	Prefix                string
+	LoginSuccessURL       string
+	Assets                embed.FS
+	DB                    *squealx.DB
+	SendNotification      libs.NotificationHandler
+	DisabledRoutesHandler func() []string
 }
 
 func (p *Plugin) Register() {
@@ -48,6 +49,9 @@ func (p *Plugin) Register() {
 	vault, err := storage.NewDatabaseStorage(db)
 	if err != nil {
 		log.Fatalf("Failed to initialize DatabaseVaultStorage: %v", err)
+	}
+	if p.DisabledRoutesHandler != nil {
+		cfg.DisableRoutesHandler = p.DisabledRoutesHandler
 	}
 	manager := libs.NewManager(vault, cfg)
 	manager.SendNotification = p.SendNotification
