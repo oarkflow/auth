@@ -1,6 +1,9 @@
 package middlewares
 
 import (
+	"path"
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/oarkflow/paseto/token"
@@ -9,14 +12,16 @@ import (
 )
 
 func SendError(c *fiber.Ctx, status int, message string) error {
-	// Store last visited URI in a cookie for redirect after login
 	lastURI := c.OriginalURL()
-	c.Cookie(&fiber.Cookie{
-		Name:     "last_visited_uri",
-		Value:    lastURI,
-		Path:     "/",
-		HTTPOnly: true,
-	})
+	// Only store last visited URI if it's not a static asset
+	if !isAssetURI(lastURI) {
+		c.Cookie(&fiber.Cookie{
+			Name:     "last_visited_uri",
+			Value:    lastURI,
+			Path:     "/",
+			HTTPOnly: true,
+		})
+	}
 	contentType := c.Get("Content-Type")
 	if contentType == fiber.MIMEApplicationJSON || contentType == fiber.MIMEApplicationJSONCharsetUTF8 {
 		return c.Status(status).JSON(fiber.Map{
@@ -26,6 +31,12 @@ func SendError(c *fiber.Ctx, status int, message string) error {
 		})
 	}
 	return c.Status(status).Redirect("/login")
+}
+
+// Helper to check if URI is an asset
+func isAssetURI(uri string) bool {
+	ext := strings.ToLower(path.Ext(uri))
+	return ext != ""
 }
 
 func Verify(c *fiber.Ctx) error {
