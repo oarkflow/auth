@@ -1,37 +1,12 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Central Authentication System</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: {
-                            50: '#eff6ff',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-</head>
-
-<body class="bg-gradient-to-br from-blue-50 via-white to-indigo-50 min-h-screen">
+<div class="bg-blue-50 dark:bg-gray-900 min-h-screen">
     <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div class="max-w-md w-full space-y-8">
             <!-- Success Message (hidden by default) -->
             <div id="verification-success"
-                class="hidden bg-green-50 border border-green-200 text-green-800 rounded-lg px-4 py-3 text-center mb-4">
+                class="hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300 rounded-lg px-4 py-3 text-center mb-4">
                 <div class="flex items-center justify-center mb-1">
-                    <svg class="h-5 w-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="h-5 w-5 text-green-500 dark:text-green-400 mr-2" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                     </svg>
                     <span class="font-semibold">Verification successful!</span>
@@ -48,28 +23,28 @@
                         </path>
                     </svg>
                 </div>
-                <h1 class="text-3xl font-bold text-gray-900">Sign In</h1>
-                <p class="mt-2 text-gray-600">Enter your username to continue</p>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Sign In</h1>
+                <p class="mt-2 text-gray-600 dark:text-gray-300">Enter your username to continue</p>
             </div>
 
             <!-- Username Form -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
                 <form action="{{uris.Login}}" method="POST" class="space-y-6">
                     <!-- Username Field -->
                     <div>
-                        <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
+                        <label for="username" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Username (Email or Phone)
                         </label>
                         <div class="relative">
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor"
+                                <svg class="h-5 w-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                 </svg>
                             </div>
                             <input type="text" id="username" name="username" required
-                                class="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent placeholder-gray-400 transition duration-200"
+                                class="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white transition duration-200"
                                 placeholder="your-email@example.com" autofocus>
                         </div>
                     </div>
@@ -94,18 +69,22 @@
             <!-- Additional Options -->
             <div class="text-center space-y-3">
                 <div>
-                    <a href="{{uris.Register}}" class="text-sm text-gray-600 hover:text-gray-800">
+                    <a href="{{uris.Register}}"
+                        class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
                         Don't have an account? <span
-                            class="font-medium text-primary-600 hover:text-primary-500">Register here</span>
+                            class="font-medium text-primary-600 dark:text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">Register
+                            here</span>
                     </a>
                 </div>
                 <div>
-                    <a href="{{uris.ForgotPassword}}" class="text-sm text-gray-500 hover:text-gray-700">
+                    <a href="{{uris.ForgotPassword}}"
+                        class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
                         Forgot your password?
                     </a>
                 </div>
                 <div>
-                    <a href="/" class="text-sm text-gray-500 hover:text-gray-700">
+                    <a href="/"
+                        class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
                         ← Back to home
                     </a>
                 </div>
@@ -118,6 +97,4 @@
             document.getElementById('verification-success').classList.remove('hidden');
         }
     </script>
-</body>
-
-</html>
+</div>

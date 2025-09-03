@@ -10,4 +10,5 @@ var (
 	Manager    contracts.Manager
 	Config     contracts.Config
 	ViewEngine fiber.Views
+	Layout     string
 )

@@ -1,33 +1,26 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MFA Disabled Successfully</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-
-<body class="bg-gradient-to-br from-yellow-50 to-orange-100 min-h-screen">
+<div class="bg-yellow-50 dark:bg-gray-900 min-h-screen">
     <div class="container mx-auto px-4 py-12 max-w-lg">
-        <div class="bg-white rounded-xl shadow-lg p-8 text-center">
-            <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 text-center">
+            <div
+                class="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-8 h-8 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z">
                     </path>
                 </svg>
             </div>
 
-            <h1 class="text-2xl font-bold text-gray-900 mb-4">MFA Disabled</h1>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">MFA Disabled</h1>
 
-            <p class="text-gray-600 mb-6">
+            <p class="text-gray-600 dark:text-gray-300 mb-6">
                 Multi-Factor Authentication has been disabled for your account. You can re-enable it at any time from
                 your account settings.
             </p>
 
-            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                <p class="text-sm text-yellow-800">
+            <div
+                class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+                <p class="text-sm text-yellow-800 dark:text-yellow-300">
                     <strong>Security Notice:</strong> Your account is now less secure without MFA. Consider re-enabling
                     it for better protection.
                 </p>
@@ -40,12 +33,10 @@
                 </a>
 
                 <a href="{{uris.MFASetup}}"
-                    class="block w-full bg-green-100 hover:bg-green-200 text-green-700 font-semibold py-3 px-4 rounded-lg transition-colors">
+                    class="block w-full bg-green-100 dark:bg-green-900/20 hover:bg-green-200 dark:hover:bg-green-800/30 text-green-700 dark:text-green-300 font-semibold py-3 px-4 rounded-lg transition-colors">
                     Re-enable MFA
                 </a>
             </div>
         </div>
     </div>
-</body>
-
-</html>
+</div>

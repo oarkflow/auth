@@ -24,7 +24,10 @@ func main() {
 	objects.Config = New(".env", true, nil)
 	cfg := config.Config{}
 	cfg.Load()
-	app := fiber.New()
+	objects.Layout = "layouts/main"
+	app := fiber.New(fiber.Config{
+		ViewsLayout: objects.Layout,
+	})
 	authPlugin := v2.NewPlugin("/", "/app", libs.NotificationHandler{}, app)
 	authPlugin.Register()
 	if err := app.Listen(":3000"); err != nil {
