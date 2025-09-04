@@ -140,6 +140,11 @@ func VerifyPage(c *fiber.Ctx) error {
 	objects.Manager.RegisterUserKey(pubHex, []byte(pubx), []byte(puby))
 	objects.Manager.Vault().SetUserSecret(info.UserID, passwordHash)
 
+	// Invalidate cache for the new user
+	if manager, ok := objects.Manager.(*libs.Manager); ok {
+		manager.InvalidateUserInfoCache(username)
+	}
+
 	userIDStr := fmt.Sprintf("%d", info.UserID)
 	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionVerifyEmail, nil, true, nil)
 

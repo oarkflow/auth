@@ -192,6 +192,11 @@ func PostResetPassword(c *fiber.Ctx) error {
 	objects.Manager.Vault().SetUserPublicKey(info.UserID, libs.PadHex(pubx), libs.PadHex(puby))
 	objects.Manager.RegisterUserKey(pubHex, []byte(pubx), []byte(puby))
 	objects.Manager.Vault().SetUserSecret(info.UserID, passwordHash)
+
+	// Invalidate cache for the updated user
+	if manager, ok := objects.Manager.(*libs.Manager); ok {
+		manager.InvalidateUserInfoCache(info.Username)
+	}
 	encPrivD = utils.EncryptPrivateKeyD(privd, passwordHash)
 	keyData = map[string]string{
 		"PubKeyX":              libs.PadHex(pubx),

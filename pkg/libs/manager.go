@@ -3,6 +3,7 @@ package libs
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"fmt"
 	"log"
 	"math/big"
 	"strings"
@@ -15,12 +16,23 @@ import (
 )
 
 const (
+	userInfoCacheTTL     = 5 * time.Minute  // Cache user info for 5 minutes
+	cacheCleanupInterval = 10 * time.Minute // Clean up expired cache entries every 10 minutes
+)
+
+const (
 	nonceCleanupSec       = 60
 	maxLoginAttempts      = 5
 	loginCooldownPeriod   = 15 * time.Minute
 	maxRequestsPerMin     = 30
 	passwordResetTokenExp = 30 * time.Minute
 )
+
+// cachedUserInfo holds cached user information with expiration
+type cachedUserInfo struct {
+	UserInfo  models.UserInfo
+	ExpiresAt time.Time
+}
 
 type SecurityManager struct {
 	RateLimiter *models.RateLimiter
@@ -141,6 +153,10 @@ type Manager struct {
 	Curve             elliptic.Curve
 	UserLogoutTracker contracts.LogoutTracker
 
+	// User Info Cache
+	UserInfoCache   map[string]cachedUserInfo // username -> cached user info
+	UserInfoCacheMu sync.RWMutex
+
 	// Verification storage
 	VerificationTokens map[string]string // username -> token
 	VerificationStatus map[string]bool   // username -> verified
@@ -200,19 +216,55 @@ func NewManager(vaultStorage contracts.Storage, configs ...*Config) *Manager {
 	if len(configs) > 0 {
 		cfg = configs[0]
 	}
-	return &Manager{
+	manager := &Manager{
 		vault:                vaultStorage,
 		Config:               cfg,
 		UserLogoutTracker:    NewUserLogoutTracker(),
 		UserRegistry:         make(map[string]ecdsa.PublicKey),
 		NonceCache:           make(map[string]int64),
 		Curve:                elliptic.P256(),
+		UserInfoCache:        make(map[string]cachedUserInfo),
 		VerificationTokens:   make(map[string]string),
 		VerificationStatus:   make(map[string]bool),
 		PasswordResetTokens:  make(map[string]models.PasswordResetData),
 		security:             NewSecurityManager(vaultStorage),
 		DisableRoutesHandler: cfg.DisableRoutesHandler,
 	}
+
+	// Start cache cleanup goroutine
+	go manager.startCacheCleanup()
+
+	return manager
+}
+
+// startCacheCleanup starts a goroutine to periodically clean up expired cache entries
+func (m *Manager) startCacheCleanup() {
+	ticker := time.NewTicker(cacheCleanupInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		m.cleanupExpiredCacheEntries()
+	}
+}
+
+// cleanupExpiredCacheEntries removes expired entries from the user info cache
+func (m *Manager) cleanupExpiredCacheEntries() {
+	m.UserInfoCacheMu.Lock()
+	defer m.UserInfoCacheMu.Unlock()
+
+	now := time.Now()
+	for username, cached := range m.UserInfoCache {
+		if now.After(cached.ExpiresAt) {
+			delete(m.UserInfoCache, username)
+		}
+	}
+}
+
+// InvalidateUserInfoCache removes a user's cache entry by username
+func (m *Manager) InvalidateUserInfoCache(username string) {
+	m.UserInfoCacheMu.Lock()
+	defer m.UserInfoCacheMu.Unlock()
+	delete(m.UserInfoCache, username)
 }
 
 // CleanupExpiredNonces removes expired nonces from the cache
@@ -322,8 +374,37 @@ func (m *Manager) RegisterUserKey(pubHex string, pubKeyX, pubKeyY []byte) {
 }
 
 func (manager *Manager) LookupUserByUsername(username string) (models.UserInfo, bool) {
+	// Check cache first
+	manager.UserInfoCacheMu.RLock()
+	if cached, exists := manager.UserInfoCache[username]; exists {
+		if time.Now().Before(cached.ExpiresAt) {
+			manager.UserInfoCacheMu.RUnlock()
+			return cached.UserInfo, true
+		}
+		// Cache expired, remove it
+		manager.UserInfoCacheMu.RUnlock()
+		manager.UserInfoCacheMu.Lock()
+		delete(manager.UserInfoCache, username)
+		manager.UserInfoCacheMu.Unlock()
+	} else {
+		manager.UserInfoCacheMu.RUnlock()
+	}
+	fmt.Println("check in db", username)
+	// Cache miss or expired, fetch from database
 	info, err := manager.vault.GetUserInfoByUsername(username)
-	return info, err == nil
+	if err != nil {
+		return models.UserInfo{}, false
+	}
+
+	// Cache the result
+	manager.UserInfoCacheMu.Lock()
+	manager.UserInfoCache[username] = cachedUserInfo{
+		UserInfo:  info,
+		ExpiresAt: time.Now().Add(userInfoCacheTTL),
+	}
+	manager.UserInfoCacheMu.Unlock()
+
+	return info, true
 }
 
 func (manager *Manager) LookupUserByPubHex(pubHex string) (models.UserInfo, bool) {
