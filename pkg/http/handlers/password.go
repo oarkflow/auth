@@ -199,6 +199,10 @@ func PostResetPassword(c *fiber.Ctx) error {
 		"EncryptedPrivateKeyD": encPrivD,
 	}
 	jsonData, _ := json.Marshal(keyData)
+
+	userIDStr := fmt.Sprintf("%d", info.UserID)
+	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionPasswordReset, nil, true, nil)
+
 	return responses.Render(c, utils.PasswordResetSuccessTemplate, fiber.Map{
 		"KeyJson": template.JS(jsonData),
 	})
@@ -265,6 +269,10 @@ func PostForgotPassword(c *fiber.Ctx) error {
 	}
 	tokenStr := hex.EncodeToString(tokenBytes)
 	objects.Manager.SetPasswordResetToken(username, tokenStr)
+
+	userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionPasswordReset, nil, true, nil)
+
 	if utils.IsPhone(username) {
 		smsSender(c, username, tokenStr)
 		return responses.Render(c, utils.ForgotPasswordTemplate, fiber.Map{

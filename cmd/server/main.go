@@ -18,6 +18,8 @@ import (
 	"github.com/oarkflow/auth/pkg/config"
 	"github.com/oarkflow/auth/pkg/libs"
 	"github.com/oarkflow/auth/pkg/objects"
+	"github.com/oarkflow/squealx"
+	"github.com/oarkflow/squealx/connection"
 )
 
 func main() {
@@ -28,7 +30,25 @@ func main() {
 	app := fiber.New(fiber.Config{
 		ViewsLayout: objects.Layout,
 	})
-	authPlugin := v2.NewPlugin("/", "/app", libs.NotificationHandler{}, app)
+	dbConfig := squealx.Config{
+		Driver:   "postgres",
+		Host:     "localhost",
+		Port:     5432,
+		Username: "postgres",
+		Password: "postgres",
+		Database: "communities",
+	}
+	db, _, err := connection.FromConfig(dbConfig)
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+	authPlugin := v2.NewPluginWithOptions(
+		v2.WithPrefix("/"),
+		v2.WithLoginSuccessURL("/app"),
+		v2.WithNotificationHandler(libs.NotificationHandler{}),
+		v2.WithApp(app),
+		v2.WithDB(db),
+	)
 	authPlugin.Register()
 	if err := app.Listen(":3000"); err != nil {
 		log.Fatal(err)

@@ -1,6 +1,20 @@
 <div class="bg-blue-50 dark:bg-gray-900 min-h-screen">
     <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div class="max-w-md w-full space-y-8">
+            <!-- Error Message (hidden by default) -->
+            <div id="error-message"
+                class="hidden bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded-lg px-4 py-3 text-center mb-4">
+                <div class="flex items-center justify-center mb-1">
+                    <svg class="h-5 w-5 text-red-500 dark:text-red-400 mr-2" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span class="font-semibold">Error</span>
+                </div>
+                <span id="error-text">An error occurred. Please try again.</span>
+            </div>
+
             <!-- Success Message (hidden by default) -->
             <div id="verification-success"
                 class="hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-300 rounded-lg px-4 py-3 text-center mb-4">
@@ -95,6 +109,18 @@
         // Show success message if ?v=1 is present
         if (new URLSearchParams(window.location.search).get('v') === '1') {
             document.getElementById('verification-success').classList.remove('hidden');
+        }
+
+        // Show error message if ?error is present
+        const urlParams = new URLSearchParams(window.location.search);
+        const errorParam = urlParams.get('error');
+        if (errorParam) {
+            const errorMessage = document.getElementById('error-message');
+            const errorText = document.getElementById('error-text');
+
+            // Decode and display the error message
+            errorText.textContent = decodeURIComponent(errorParam);
+            errorMessage.classList.remove('hidden');
         }
     </script>
 </div>

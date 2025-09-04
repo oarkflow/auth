@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/oarkflow/auth/pkg/http/handlers"
+	"github.com/oarkflow/auth/pkg/http/middlewares"
 	"github.com/oarkflow/auth/pkg/objects"
 	"github.com/oarkflow/auth/pkg/utils"
 )
@@ -16,18 +17,18 @@ func Setup(prefix string, router fiber.Router) {
 	DisabledRoutes(route, "Get", utils.LandingURI, handlers.LandingPage)
 	DisabledRoutes(route, "Get", utils.VerifyURI, handlers.VerifyPage)
 	DisabledRoutes(route, "Get", utils.ResetPasswordURI, handlers.PasswordResetPage)
-	DisabledRoutes(route, "Post", utils.ResetPasswordURI, handlers.PostResetPassword)
+	DisabledRoutes(route, "Post", utils.ResetPasswordURI, middlewares.RateLimitWithMax(3), handlers.PostResetPassword)
 	DisabledRoutes(route, "Get", utils.LoginURI, handlers.LoginPage)
-	DisabledRoutes(route, "Post", utils.LoginURI, handlers.PostLogin)
+	DisabledRoutes(route, "Post", utils.LoginURI, middlewares.RateLimitWithMax(3), handlers.PostLogin)
 	DisabledRoutes(route, "Get", utils.RegisterURI, handlers.RegisterPage)
-	DisabledRoutes(route, "Post", utils.RegisterURI, handlers.PostRegister)
-	DisabledRoutes(route, "Post", utils.SimpleLoginURI, handlers.PostSimpleLogin)
-	DisabledRoutes(route, "Post", utils.SecuredLoginURI, handlers.PostSecureLogin)
+	DisabledRoutes(route, "Post", utils.RegisterURI, middlewares.RateLimitWithMax(3), handlers.PostRegister)
+	DisabledRoutes(route, "Post", utils.SimpleLoginURI, middlewares.RateLimitWithMax(3), handlers.PostSimpleLogin)
+	DisabledRoutes(route, "Post", utils.SecuredLoginURI, middlewares.RateLimitWithMax(3), handlers.PostSecureLogin)
 	DisabledRoutes(route, "Get", utils.ForgotPasswordURI, handlers.ForgotPasswordPage)
-	DisabledRoutes(route, "Post", utils.ForgotPasswordURI, handlers.PostForgotPassword)
+	DisabledRoutes(route, "Post", utils.ForgotPasswordURI, middlewares.RateLimitWithMax(3), handlers.PostForgotPassword)
 	DisabledRoutes(route, "Get", utils.OneTimeURI, handlers.OneTimePage)
 	DisabledRoutes(route, "Get", utils.MFAVerifyURI, handlers.MFAVerifyPage)
-	DisabledRoutes(route, "Post", utils.MFAVerifyURI, handlers.PostMFAVerify)
+	DisabledRoutes(route, "Post", utils.MFAVerifyURI, middlewares.RateLimitWithMax(3), handlers.PostMFAVerify)
 }
 
 func ProtectedRoutes(route fiber.Router) {

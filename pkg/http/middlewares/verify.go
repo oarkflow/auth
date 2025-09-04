@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"fmt"
 	"net/url"
 	"path"
 	"strings"
@@ -79,6 +80,9 @@ func Verify(c *fiber.Ctx) error {
 	if iat > 0 && objects.Manager.LogoutTracker().IsUserLoggedOut(userInfo.UserID, int64(iat)) {
 		return SendError(c, fiber.StatusUnauthorized, "session loggout")
 	}
+
+	userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionAccessProtected, utils.StringPtr(c.Path()), true, nil)
 
 	c.Locals("userInfo", userInfo)
 	c.Locals("user_id", userInfo.UserID)

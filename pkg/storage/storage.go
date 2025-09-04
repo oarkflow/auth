@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ type DatabaseType string
 const (
 	MySQL      DatabaseType = "mysql"
 	PostgreSQL DatabaseType = "postgres"
+	PGXversion DatabaseType = "pgx"
 	SQLite     DatabaseType = "sqlite"
 )
 
@@ -52,7 +54,7 @@ func (d *DatabaseStorage) createTables() error {
 	switch d.dbType {
 	case MySQL:
 		queries = d.getMySQLSchema()
-	case PostgreSQL:
+	case PostgreSQL, PGXversion:
 		queries = d.getPostgreSQLSchema()
 	case SQLite:
 		queries = d.getSQLiteSchema()
@@ -122,6 +124,18 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 			INDEX idx_pending_registrations_username (username)
 		) ENGINE=InnoDB`,
 
+		`CREATE TABLE IF NOT EXISTS login_attempts (
+			id BIGINT PRIMARY KEY AUTO_INCREMENT,
+			identifier VARCHAR(255) NOT NULL,
+			ip_address VARCHAR(45),
+			user_agent TEXT,
+			success TINYINT(1) DEFAULT 0,
+			attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			INDEX idx_login_attempts_identifier (identifier),
+			INDEX idx_login_attempts_ip_address (ip_address),
+			INDEX idx_login_attempts_attempt_time (attempt_time)
+		) ENGINE=InnoDB`,
+
 		`CREATE TABLE IF NOT EXISTS audit_logs (
 			id BIGINT PRIMARY KEY AUTO_INCREMENT,
 			user_id VARCHAR(255),
@@ -187,6 +201,15 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 			password_hash TEXT NOT NULL,
 			login_type login_type_enum DEFAULT 'simple',
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS login_attempts (
+			id BIGSERIAL PRIMARY KEY,
+			identifier VARCHAR(255) NOT NULL,
+			ip_address INET,
+			user_agent TEXT,
+			success BOOLEAN DEFAULT FALSE,
+			attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS audit_logs (
@@ -261,6 +284,15 @@ func (d *DatabaseStorage) getSQLiteSchema() []string {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		`CREATE TABLE IF NOT EXISTS login_attempts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			identifier TEXT NOT NULL,
+			ip_address TEXT,
+			user_agent TEXT,
+			success INTEGER DEFAULT 0,
+			attempt_time DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		`CREATE TABLE IF NOT EXISTS audit_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id TEXT,
@@ -283,6 +315,12 @@ func (d *DatabaseStorage) getSQLiteSchema() []string {
 		`CREATE INDEX IF NOT EXISTS idx_verification_tokens_username ON verification_tokens(username)`,
 		`CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token)`,
 		`CREATE INDEX IF NOT EXISTS idx_pending_registrations_username ON pending_registrations(username)`,
+		`CREATE INDEX IF NOT EXISTS idx_login_attempts_identifier ON login_attempts(identifier)`,
+		`CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_address ON login_attempts(ip_address)`,
+		`CREATE INDEX IF NOT EXISTS idx_login_attempts_attempt_time ON login_attempts(attempt_time)`,
+		`CREATE INDEX IF NOT EXISTS idx_login_attempts_identifier ON login_attempts(identifier)`,
+		`CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_address ON login_attempts(ip_address)`,
+		`CREATE INDEX IF NOT EXISTS idx_login_attempts_attempt_time ON login_attempts(attempt_time)`,
 		`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`,
 		`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)`,
@@ -711,6 +749,161 @@ func (d *DatabaseStorage) ValidateBackupCode(userID int64, code string) error {
 
 func (d *DatabaseStorage) InvalidateBackupCode(userID int64, code string) error {
 	return d.ValidateBackupCode(userID, code) // Same logic
+}
+
+// --- Audit Logging Methods ---
+func (d *DatabaseStorage) LogAuditEvent(userID *string, action string, resource *string, ipAddress string, userAgent *string, success bool, errorMsg *string) error {
+	query := `INSERT INTO audit_logs (user_id, action, resource, ip_address, user_agent, success, error_message) VALUES (:user_id, :action, :resource, :ip_address, :user_agent, :success, :error_message)`
+	params := map[string]any{
+		"user_id":       userID,
+		"action":        action,
+		"resource":      resource,
+		"ip_address":    ipAddress,
+		"user_agent":    userAgent,
+		"success":       d.convertBoolForDB(success),
+		"error_message": errorMsg,
+	}
+	_, err := d.db.NamedExec(query, params)
+	return err
+}
+
+func (d *DatabaseStorage) GetAuditLogs(userID *string, limit int, offset int) ([]models.AuditLog, error) {
+	var query string
+	var params map[string]any
+
+	if userID != nil {
+		query = `SELECT id, user_id, action, resource, ip_address, user_agent, success, error_message, created_at FROM audit_logs WHERE user_id = :user_id ORDER BY created_at DESC LIMIT :limit OFFSET :offset`
+		params = map[string]any{
+			"user_id": *userID,
+			"limit":   limit,
+			"offset":  offset,
+		}
+	} else {
+		query = `SELECT id, user_id, action, resource, ip_address, user_agent, success, error_message, created_at FROM audit_logs ORDER BY created_at DESC LIMIT :limit OFFSET :offset`
+		params = map[string]any{
+			"limit":  limit,
+			"offset": offset,
+		}
+	}
+
+	var results []struct {
+		ID        int64     `db:"id"`
+		UserID    *string   `db:"user_id"`
+		Action    string    `db:"action"`
+		Resource  *string   `db:"resource"`
+		IPAddress string    `db:"ip_address"`
+		UserAgent *string   `db:"user_agent"`
+		Success   any       `db:"success"`
+		ErrorMsg  *string   `db:"error_message"`
+		CreatedAt time.Time `db:"created_at"`
+	}
+
+	err := d.db.NamedSelect(&results, query, params)
+	if err != nil {
+		return nil, err
+	}
+
+	var auditLogs []models.AuditLog
+	for _, result := range results {
+		auditLogs = append(auditLogs, models.AuditLog{
+			ID:        result.ID,
+			UserID:    result.UserID,
+			Action:    result.Action,
+			Resource:  result.Resource,
+			IPAddress: result.IPAddress,
+			UserAgent: result.UserAgent,
+			Success:   d.convertBoolFromDB(result.Success),
+			ErrorMsg:  result.ErrorMsg,
+			CreatedAt: result.CreatedAt,
+		})
+	}
+
+	return auditLogs, nil
+}
+
+// --- Login Attempts Methods ---
+func (d *DatabaseStorage) RecordLoginAttempt(identifier string, ipAddress string, userAgent *string, success bool) error {
+	log.Printf("DEBUG: RecordLoginAttempt called with identifier: %s, ip: %s, success: %v", identifier, ipAddress, success)
+	query := `INSERT INTO login_attempts (identifier, ip_address, user_agent, success) VALUES (:identifier, :ip_address, :user_agent, :success)`
+	params := map[string]any{
+		"identifier": identifier,
+		"ip_address": ipAddress,
+		"user_agent": userAgent,
+		"success":    d.convertBoolForDB(success),
+	}
+	_, err := d.db.NamedExec(query, params)
+	if err != nil {
+		log.Printf("DEBUG: RecordLoginAttempt failed: %v", err)
+	} else {
+		log.Printf("DEBUG: RecordLoginAttempt succeeded for identifier: %s", identifier)
+	}
+	return err
+}
+
+func (d *DatabaseStorage) GetRecentLoginAttempts(identifier string, since time.Time) ([]models.LoginAttempt, error) {
+	query := `SELECT id, identifier, ip_address, user_agent, success, attempt_time FROM login_attempts WHERE identifier = :identifier AND attempt_time >= :since ORDER BY attempt_time DESC`
+	params := map[string]any{
+		"identifier": identifier,
+		"since":      since,
+	}
+
+	var results []struct {
+		ID          int64     `db:"id"`
+		Identifier  string    `db:"identifier"`
+		IPAddress   string    `db:"ip_address"`
+		UserAgent   *string   `db:"user_agent"`
+		Success     any       `db:"success"`
+		AttemptTime time.Time `db:"attempt_time"`
+	}
+
+	err := d.db.NamedSelect(&results, query, params)
+	if err != nil {
+		return nil, err
+	}
+
+	var loginAttempts []models.LoginAttempt
+	for _, result := range results {
+		loginAttempts = append(loginAttempts, models.LoginAttempt{
+			ID:          result.ID,
+			Identifier:  result.Identifier,
+			IPAddress:   result.IPAddress,
+			UserAgent:   result.UserAgent,
+			Success:     d.convertBoolFromDB(result.Success),
+			AttemptTime: result.AttemptTime,
+		})
+	}
+
+	return loginAttempts, nil
+}
+
+func (d *DatabaseStorage) ClearOldLoginAttempts(before time.Time) error {
+	query := `DELETE FROM login_attempts WHERE attempt_time < :before`
+	params := map[string]any{
+		"before": before,
+	}
+	_, err := d.db.NamedExec(query, params)
+	return err
+}
+
+func (d *DatabaseStorage) IsLoginBlocked(identifier string, maxAttempts int, window time.Duration) (bool, error) {
+	windowStart := time.Now().Add(-window)
+	query := `SELECT COUNT(*) as attempt_count FROM login_attempts WHERE identifier = :identifier AND attempt_time >= :window_start AND success = :success`
+	params := map[string]any{
+		"identifier":   identifier,
+		"window_start": windowStart,
+		"success":      d.convertBoolForDB(false), // Only count failed attempts
+	}
+
+	var result struct {
+		AttemptCount int `db:"attempt_count"`
+	}
+
+	err := d.db.NamedGet(&result, query, params)
+	if err != nil {
+		return false, err
+	}
+
+	return result.AttemptCount >= maxAttempts, nil
 }
 
 // Helper function to detect database type from connection string or driver

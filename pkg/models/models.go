@@ -65,3 +65,26 @@ type LoginStepResponse struct {
 	RequireMFA bool   `json:"require_mfa,omitempty"`
 	UserID     string `json:"user_id,omitempty"`
 }
+
+// LoginAttempt represents a login attempt entry
+type LoginAttempt struct {
+	ID          int64     `db:"id"`
+	Identifier  string    `db:"identifier"`
+	IPAddress   string    `db:"ip_address"`
+	UserAgent   *string   `db:"user_agent"`
+	Success     bool      `db:"success"`
+	AttemptTime time.Time `db:"attempt_time"`
+}
+
+// AuditLog represents an audit log entry
+type AuditLog struct {
+	ID        int64     `db:"id"`
+	UserID    *string   `db:"user_id"`
+	Action    string    `db:"action"`
+	Resource  *string   `db:"resource"`
+	IPAddress string    `db:"ip_address"`
+	UserAgent *string   `db:"user_agent"`
+	Success   bool      `db:"success"`
+	ErrorMsg  *string   `db:"error_message"`
+	CreatedAt time.Time `db:"created_at"`
+}

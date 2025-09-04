@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -109,6 +110,7 @@ func VerifyPage(c *fiber.Ctx) error {
 	// Use verification token table
 	ok, err := objects.Manager.Vault().VerifyToken(username, token)
 	if err != nil || !ok {
+		utils.LogAuditEvent(c, objects.Manager, nil, utils.AuditActionVerifyEmail, nil, false, utils.StringPtr("Verification token does not match or does not exist"))
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Verification",
 			"This verification link is either invalid or has already been used.",
 			"The link may have expired or been used already. Please try registering again to get a new verification link.",
@@ -137,6 +139,9 @@ func VerifyPage(c *fiber.Ctx) error {
 	objects.Manager.Vault().SetUserPublicKey(info.UserID, libs.PadHex(pubx), libs.PadHex(puby))
 	objects.Manager.RegisterUserKey(pubHex, []byte(pubx), []byte(puby))
 	objects.Manager.Vault().SetUserSecret(info.UserID, passwordHash)
+
+	userIDStr := fmt.Sprintf("%d", info.UserID)
+	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionVerifyEmail, nil, true, nil)
 
 	encPrivD := utils.EncryptPrivateKeyD(privd, passwordHash)
 	keyData := map[string]string{
@@ -171,6 +176,14 @@ func OneTimePage(c *fiber.Ctx) error {
 func PostLogin(c *fiber.Ctx) error {
 	var req requests.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
+		clientIP := utils.GetClientIP(c)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(clientIP, uaPtr)
+		utils.LogAuditEvent(c, objects.Manager, nil, utils.AuditActionLoginAttempt, nil, false, utils.StringPtr(fmt.Sprintf("ParseForm error: %v", err)))
 		return renderErrorPage(c, http.StatusBadRequest, "Invalid Form Data",
 			"The form data could not be processed.",
 			"Please check your input and try again.",
@@ -178,6 +191,14 @@ func PostLogin(c *fiber.Ctx) error {
 	}
 	username := utils.SanitizeInput(strings.TrimSpace(req.Username))
 	if username == "" {
+		clientIP := utils.GetClientIP(c)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(clientIP, uaPtr)
+		utils.LogAuditEvent(c, objects.Manager, nil, utils.AuditActionLoginAttempt, nil, false, utils.StringPtr("Missing username field"))
 		return renderErrorPage(c, http.StatusBadRequest, "Missing Username",
 			"Username is required to determine your login method.",
 			"Please provide your username (email or phone number).",
@@ -192,18 +213,36 @@ func PostLogin(c *fiber.Ctx) error {
 		validationErr = fmt.Errorf("username must be a valid email address or phone number")
 	}
 	if validationErr != nil {
-		return renderErrorPage(c, http.StatusBadRequest, "Invalid Username Format",
-			"The username you provided is not valid.",
-			validationErr.Error(),
-			validationErr.Error(), utils.LoginURI)
+		clientIP := utils.GetClientIP(c)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(clientIP, uaPtr)
+		utils.LogAuditEvent(c, objects.Manager, nil, utils.AuditActionLoginAttempt, nil, false, utils.StringPtr(validationErr.Error()))
+		return c.Redirect(utils.LoginURI+"?error="+url.QueryEscape(validationErr.Error()), http.StatusSeeOther)
 	}
 	userInfo, hasUser := objects.Manager.LookupUserByUsername(username)
 	if !hasUser {
+		clientIP := utils.GetClientIP(c)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(clientIP, uaPtr)
+		utils.LogAuditEvent(c, objects.Manager, nil, utils.AuditActionLoginFailed, nil, false, utils.StringPtr(fmt.Sprintf("Username '%s' not found", username)))
 		return renderErrorPage(c, http.StatusNotFound, "User Not Found",
 			"No account found with that username.",
 			"Please check your username or register for a new account.",
-			fmt.Sprintf("Username '%s' not found", username), utils.RegisterURI)
+			fmt.Sprintf("Username '%s' not found", username), utils.LoginURI)
 	}
+
+	// Log successful login attempt (user found)
+	userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionLoginAttempt, nil, true, nil)
+
 	if userInfo.MFAEnabled {
 		return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 			"Username": userInfo.Username,
@@ -319,6 +358,7 @@ func PostRegister(c *fiber.Ctx) error {
 		})
 	}
 	emailSender(c, username, tokenStr)
+	utils.LogAuditEvent(c, objects.Manager, nil, utils.AuditActionRegister, nil, true, nil)
 	return responses.Render(c, utils.VerificationSentTemplate, fiber.Map{
 		"Title":   "Verification Sent",
 		"Message": "Registered. Please check your email for verification.",
@@ -353,7 +393,13 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 	}
 	userInfo, hasUser := objects.Manager.LookupUserByUsername(username)
 	if !hasUser {
-		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier, uaPtr)
+		utils.LogAuditEvent(c, objects.Manager, nil, utils.AuditActionLoginFailed, nil, false, utils.StringPtr("Username not found in database"))
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Credentials",
 			"The username or password you entered is incorrect.",
 			"Please check your credentials and try again, or register for a new account.",
@@ -367,7 +413,12 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 	}
 	storedPassword, err := objects.Manager.Vault().GetUserSecret(userInfo.UserID)
 	if err != nil {
-		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier, uaPtr)
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Credentials",
 			"The username or password you entered is incorrect.",
 			"Please check your credentials and try again, or register for a new account.",
@@ -376,13 +427,22 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 
 	ok, err := verifyPassword(password, storedPassword)
 	if err != nil || !ok {
-		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier, uaPtr)
+		userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+		utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionLoginFailed, nil, false, utils.StringPtr("Password verification failed"))
 		return renderErrorPage(c, http.StatusUnauthorized, "Invalid Credentials",
 			"The username or password you entered is incorrect.",
 			"Please check your credentials and try again.",
 			"Password verification failed", utils.LoginURI)
 	}
 	objects.Manager.Security().ClearLoginAttempts(loginIdentifier)
+	userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionLoginSuccess, nil, true, nil)
 	// Get public key for token creation
 	pubKeyX, pubKeyY, err := objects.Manager.GetPublicKeyByUserID(userInfo.UserID)
 	if err != nil {
@@ -502,7 +562,13 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	info, exists := objects.Manager.LookupUserByPubHex(pubHex)
 	if !exists {
 		// Phase 1: Record failed login attempt
-		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier, uaPtr)
+		utils.LogAuditEvent(c, objects.Manager, nil, utils.AuditActionLoginFailed, nil, false, utils.StringPtr("Public key not found in user registry"))
 		return renderErrorPage(c, http.StatusUnauthorized, "Unrecognized Key",
 			"This cryptographic key is not associated with any registered user.",
 			"Please check that you're using the correct key file, or register for a new account.",
@@ -529,7 +595,14 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	storedPubX, storedPubY, err := objects.Manager.GetPublicKeyByUserID(info.UserID)
 	if err != nil || storedPubX != pubx || storedPubY != puby {
 		// Phase 1: Record failed login attempt
-		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier, uaPtr)
+		userIDStr := fmt.Sprintf("%d", info.UserID)
+		utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionLoginFailed, nil, false, utils.StringPtr("Public key mismatch with stored credentials"))
 		return renderErrorPage(c, http.StatusUnauthorized, "Key Validation Failed",
 			"The cryptographic key does not match our stored credentials.",
 			"There may be an issue with your key file or account. Please contact support.",
@@ -539,7 +612,12 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	passwordHash, err := objects.Manager.Vault().GetUserSecret(info.UserID)
 	if err != nil {
 		// Phase 1: Record failed login attempt
-		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier, uaPtr)
 		return renderErrorPage(c, http.StatusUnauthorized, "Account Verification Failed",
 			"Could not verify your account password.",
 			"There may be an issue with your account setup. Please contact support.",
@@ -548,7 +626,14 @@ func PostSecureLogin(c *fiber.Ctx) error {
 
 	ok, err := verifyPassword(password, passwordHash)
 	if err != nil || !ok {
-		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier, uaPtr)
+		userIDStr := fmt.Sprintf("%d", info.UserID)
+		utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionLoginFailed, nil, false, utils.StringPtr("Password verification failed"))
 		return renderErrorPage(c, http.StatusUnauthorized, "Incorrect Password",
 			"The password you entered is incorrect.",
 			"Please check your password and try again. This should be the same password you used during registration.",
@@ -567,7 +652,14 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	proof := libs.GenerateProof(privD, nonce, ts)
 	if err := libs.VerifyProofWithReplay(objects.Manager, &proof); err != nil {
 		// Phase 1: Record failed login attempt
-		objects.Manager.Security().RecordFailedLogin(loginIdentifier)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier, uaPtr)
+		userIDStr := fmt.Sprintf("%d", info.UserID)
+		utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionLoginFailed, nil, false, utils.StringPtr(fmt.Sprintf("Proof verification failed: %v", err)))
 		return renderErrorPage(c, http.StatusUnauthorized, "Cryptographic Proof Failed",
 			"The cryptographic proof verification failed.",
 			"There was an issue with the authentication process. Please try again.",
@@ -576,6 +668,8 @@ func PostSecureLogin(c *fiber.Ctx) error {
 
 	// Phase 1: Clear failed login attempts on successful authentication
 	objects.Manager.Security().ClearLoginAttempts(loginIdentifier)
+	userIDStr := fmt.Sprintf("%d", info.UserID)
+	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionLoginSuccess, nil, true, nil)
 
 	now := time.Now().Unix()
 	exp := time.Now().Add(sessionTimeout).Unix()
@@ -658,6 +752,8 @@ func PostLogout(c *fiber.Ctx) error {
 			// Initialize logout tracker if needed
 			// Set user as logged out for proof-based github.com/oarkflow/auth
 			objects.Manager.LogoutTracker().SetUserLogout(userInfo.UserID)
+			userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+			utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionLogout, nil, true, nil)
 		}
 	}
 

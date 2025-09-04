@@ -1,6 +1,8 @@
 package contracts
 
 import (
+	"time"
+
 	"github.com/oarkflow/auth/pkg/models"
 )
 
@@ -25,4 +27,14 @@ type Storage interface {
 	CreatePendingRegistration(username, passwordHash, loginType string) error
 	GetPendingRegistration(username string) (string, string, error)
 	DeletePendingRegistration(username string) error
+
+	// Audit logging methods
+	LogAuditEvent(userID *string, action string, resource *string, ipAddress string, userAgent *string, success bool, errorMsg *string) error
+	GetAuditLogs(userID *string, limit int, offset int) ([]models.AuditLog, error)
+
+	// Login attempts methods
+	RecordLoginAttempt(identifier string, ipAddress string, userAgent *string, success bool) error
+	GetRecentLoginAttempts(identifier string, since time.Time) ([]models.LoginAttempt, error)
+	ClearOldLoginAttempts(before time.Time) error
+	IsLoginBlocked(identifier string, maxAttempts int, window time.Duration) (bool, error)
 }

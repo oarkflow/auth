@@ -397,6 +397,50 @@ func ValidatePhone(phone string) error {
 	return nil
 }
 
+// --- Audit Logging Utilities ---
+
+// AuditAction constants for consistent action names
+const (
+	AuditActionLoginAttempt    = "login_attempt"
+	AuditActionLoginSuccess    = "login_success"
+	AuditActionLoginFailed     = "login_failed"
+	AuditActionLogout          = "logout"
+	AuditActionRegister        = "register"
+	AuditActionVerifyEmail     = "verify_email"
+	AuditActionVerifySMS       = "verify_sms"
+	AuditActionPasswordReset   = "password_reset"
+	AuditActionMFASetup        = "mfa_setup"
+	AuditActionMFADisable      = "mfa_disable"
+	AuditActionMFABackupCode   = "mfa_backup_code"
+	AuditActionAccessProtected = "access_protected"
+	AuditActionTokenRefresh    = "token_refresh"
+)
+
+// LogAuditEvent is a utility function to log audit events
+func LogAuditEvent(c *fiber.Ctx, manager interface{}, userID *string, action string, resource *string, success bool, errorMsg *string) {
+	// Get client information
+	ipAddress := GetClientIP(c)
+	userAgent := c.Get("User-Agent")
+	var uaPtr *string
+	if userAgent != "" {
+		uaPtr = &userAgent
+	}
+
+	// Log the event asynchronously
+	if logger, ok := manager.(interface {
+		AuditLogger() interface {
+			LogEvent(userID *string, action string, resource *string, ipAddress string, userAgent *string, success bool, errorMsg *string)
+		}
+	}); ok {
+		logger.AuditLogger().LogEvent(userID, action, resource, ipAddress, uaPtr, success, errorMsg)
+	}
+}
+
+// StringPtr returns a pointer to the given string
+func StringPtr(s string) *string {
+	return &s
+}
+
 // Helpers
 func isAlphaNum(c byte) bool {
 	return (c >= 'A' && c <= 'Z') ||

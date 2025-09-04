@@ -3,7 +3,9 @@ package libs
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"log"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,25 +23,28 @@ const (
 )
 
 type SecurityManager struct {
-	RateLimiter   *models.RateLimiter
-	LoginAttempts map[string][]time.Time
-	BlockedIPs    map[string]time.Time
-	mu            sync.RWMutex
+	RateLimiter *models.RateLimiter
+	storage     contracts.Storage
+	mu          sync.RWMutex
 }
 
-func NewSecurityManager() *SecurityManager {
+func NewSecurityManager(storage contracts.Storage) *SecurityManager {
+	log.Printf("DEBUG: NewSecurityManager called with storage: %v", storage != nil)
 	return &SecurityManager{
 		RateLimiter: &models.RateLimiter{
 			Requests: make(map[string][]time.Time),
 			Attempts: make(map[string][]time.Time),
 		},
-		LoginAttempts: make(map[string][]time.Time),
-		BlockedIPs:    make(map[string]time.Time),
+		storage: storage,
 	}
 }
 
 // Phase 1: Rate Limiting and Security Functions
 func (s *SecurityManager) IsRateLimited(identifier string) bool {
+	return s.IsRateLimitedWithMax(identifier, maxRequestsPerMin)
+}
+
+func (s *SecurityManager) IsRateLimitedWithMax(identifier string, maxRequests int) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -57,7 +62,7 @@ func (s *SecurityManager) IsRateLimited(identifier string) bool {
 		}
 	}
 
-	return count >= maxRequestsPerMin
+	return count >= maxRequests
 }
 
 func (s *SecurityManager) RecordRequest(identifier string) {
@@ -86,48 +91,42 @@ func (s *SecurityManager) IsLoginBlocked(identifier string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	now := time.Now()
-	attempts, exists := s.LoginAttempts[identifier]
-	if !exists {
+	blocked, err := s.storage.IsLoginBlocked(identifier, maxLoginAttempts, loginCooldownPeriod)
+	if err != nil {
+		// Log error but don't block on database errors
+		log.Printf("Error checking login block status: %v", err)
 		return false
 	}
-
-	// Count failed attempts in the cooldown period
-	count := 0
-	for _, attemptTime := range attempts {
-		if now.Sub(attemptTime) < loginCooldownPeriod {
-			count++
-		}
-	}
-
-	return count >= maxLoginAttempts
+	return blocked
 }
 
-func (s *SecurityManager) RecordFailedLogin(identifier string) {
+func (s *SecurityManager) RecordFailedLogin(identifier string, userAgent *string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	now := time.Now()
-	if s.LoginAttempts[identifier] == nil {
-		s.LoginAttempts[identifier] = make([]time.Time, 0)
+	log.Printf("DEBUG: RecordFailedLogin called with identifier: %s, userAgent: %v", identifier, userAgent)
+
+	// Record failed login attempt in database
+	// The identifier may contain IP:username format, extract IP
+	ipAddress := identifier
+	if colonIndex := strings.LastIndex(identifier, ":"); colonIndex > 0 {
+		ipAddress = identifier[:colonIndex]
 	}
 
-	s.LoginAttempts[identifier] = append(s.LoginAttempts[identifier], now)
-
-	// Clean up old attempts
-	filtered := make([]time.Time, 0)
-	for _, attemptTime := range s.LoginAttempts[identifier] {
-		if now.Sub(attemptTime) < loginCooldownPeriod {
-			filtered = append(filtered, attemptTime)
-		}
+	err := s.storage.RecordLoginAttempt(identifier, ipAddress, userAgent, false)
+	if err != nil {
+		log.Printf("Error recording failed login attempt: %v", err)
+	} else {
+		log.Printf("DEBUG: Successfully recorded failed login attempt for identifier: %s", identifier)
 	}
-	s.LoginAttempts[identifier] = filtered
 }
 
 func (s *SecurityManager) ClearLoginAttempts(identifier string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.LoginAttempts, identifier)
+	// Note: With database storage, we don't need to explicitly clear attempts
+	// The IsLoginBlocked method will check within the time window
+	// This method is kept for interface compatibility
 }
 
 type Manager struct {
@@ -169,6 +168,26 @@ func (m *Manager) LogoutTracker() contracts.LogoutTracker {
 	return m.UserLogoutTracker
 }
 
+func (m *Manager) AuditLogger() contracts.AuditLogger {
+	return m
+}
+
+// AuditLogger implementation
+func (m *Manager) LogEvent(userID *string, action string, resource *string, ipAddress string, userAgent *string, success bool, errorMsg *string) {
+	// Log asynchronously to avoid blocking the main request
+	go func() {
+		err := m.vault.LogAuditEvent(userID, action, resource, ipAddress, userAgent, success, errorMsg)
+		if err != nil {
+			// Log the error but don't fail the main operation
+			log.Printf("Failed to log audit event: %v", err)
+		}
+	}()
+}
+
+func (m *Manager) GetLogs(userID *string, limit int, offset int) ([]models.AuditLog, error) {
+	return m.vault.GetAuditLogs(userID, limit, offset)
+}
+
 func (m *Manager) DisabledRoutes() []string {
 	if m.DisableRoutesHandler == nil {
 		return []string{}
@@ -191,7 +210,7 @@ func NewManager(vaultStorage contracts.Storage, configs ...*Config) *Manager {
 		VerificationTokens:   make(map[string]string),
 		VerificationStatus:   make(map[string]bool),
 		PasswordResetTokens:  make(map[string]models.PasswordResetData),
-		security:             NewSecurityManager(),
+		security:             NewSecurityManager(vaultStorage),
 		DisableRoutesHandler: cfg.DisableRoutesHandler,
 	}
 }

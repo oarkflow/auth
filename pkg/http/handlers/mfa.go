@@ -145,6 +145,10 @@ func PostMFASetup(c *fiber.Ctx) error {
 	// Clear session data
 	clearSessionData(c, "mfa_temp_secret")
 	clearSessionData(c, "mfa_temp_backup_codes")
+
+	userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionMFASetup, nil, true, nil)
+
 	return responses.Render(c, utils.MFAEnabledTemplate, fiber.Map{
 		"Title": "MFA Enabled",
 	})
@@ -201,12 +205,26 @@ func PostMFAVerify(c *fiber.Ctx) error {
 
 	if !isValid {
 		clientIP := utils.GetClientIP(c)
-		objects.Manager.Security().RecordFailedLogin(clientIP)
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(clientIP, uaPtr)
+		userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+		utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionMFABackupCode, nil, false, utils.StringPtr("Invalid MFA code"))
 		return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 			"Username": username,
 			"UserInfo": userInfo,
 			"Error":    "Invalid MFA code. Please try again.",
 		})
+	}
+
+	userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+	if len(code) == 6 {
+		utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionMFABackupCode, nil, true, nil)
+	} else {
+		utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionMFABackupCode, nil, true, utils.StringPtr("Backup code used"))
 	}
 
 	// Based on user's login type, show appropriate login form
@@ -259,5 +277,9 @@ func PostMFADisable(c *fiber.Ctx) error {
 			"Failed to disable MFA for your account.",
 			"Please try again later.", fmt.Sprintf("MFA disable error: %v", err), utils.AppURI)
 	}
+
+	userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionMFADisable, nil, true, nil)
+
 	return responses.Render(c, utils.MFADisabledTemplate, nil)
 }
