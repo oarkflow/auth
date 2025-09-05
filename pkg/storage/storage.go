@@ -30,7 +30,7 @@ type DatabaseStorage struct {
 }
 
 // NewDatabaseStorage creates a new database storage instance
-func NewDatabaseStorage(db *squealx.DB, disableSchemas bool) (*DatabaseStorage, error) {
+func NewDatabaseStorage(db *squealx.DB, disableSchemas bool, resetDB ...bool) (*DatabaseStorage, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database connection is nil")
 	}
@@ -40,7 +40,11 @@ func NewDatabaseStorage(db *squealx.DB, disableSchemas bool) (*DatabaseStorage, 
 		dbType:         DatabaseType(db.DriverName()),
 		DisableSchemas: disableSchemas,
 	}
-
+	if len(resetDB) > 0 && resetDB[0] {
+		if err := storage.Reset(); err != nil {
+			return nil, fmt.Errorf("failed to reset database: %w", err)
+		}
+	}
 	// Create tables with database-specific schema only if not disabled
 	if !disableSchemas {
 		if err := storage.createTables(); err != nil {
@@ -931,4 +935,51 @@ func DetectDatabaseType(driverName string, dataSource string) DatabaseType {
 	default:
 		return SQLite // Default to SQLite
 	}
+}
+
+// Reset completely clears the database by dropping all tables and recreating them
+func (d *DatabaseStorage) Reset() error {
+
+	// For SQLite, we can just delete the file and recreate
+	if d.dbType == SQLite {
+		// Note: This would require access to the database file path
+		// For now, we'll drop all tables and recreate them
+		dropQueries := []string{
+			"DROP TABLE IF EXISTS users",
+			"DROP TABLE IF EXISTS credentials",
+			"DROP TABLE IF EXISTS verification_tokens",
+			"DROP TABLE IF EXISTS pending_registrations",
+			"DROP TABLE IF EXISTS login_attempts",
+			"DROP TABLE IF EXISTS audit_logs",
+		}
+
+		for _, query := range dropQueries {
+			if _, err := d.db.Exec(query); err != nil {
+				return fmt.Errorf("failed to drop table: %w", err)
+			}
+		}
+	} else {
+		// For MySQL/PostgreSQL, drop and recreate tables
+		dropQueries := []string{
+			"DROP TABLE IF EXISTS audit_logs",
+			"DROP TABLE IF EXISTS login_attempts",
+			"DROP TABLE IF EXISTS pending_registrations",
+			"DROP TABLE IF EXISTS verification_tokens",
+			"DROP TABLE IF EXISTS credentials",
+			"DROP TABLE IF EXISTS users",
+		}
+
+		for _, query := range dropQueries {
+			if _, err := d.db.Exec(query); err != nil {
+				return fmt.Errorf("failed to drop table: %w", err)
+			}
+		}
+	}
+
+	// Recreate all tables
+	if err := d.createTables(); err != nil {
+		return fmt.Errorf("failed to recreate tables: %w", err)
+	}
+
+	return nil
 }

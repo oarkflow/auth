@@ -9,14 +9,15 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
 
+	"github.com/oarkflow/squealx"
+	"github.com/oarkflow/squealx/drivers/sqlite"
+
 	"github.com/oarkflow/auth/pkg/http/middlewares"
 	"github.com/oarkflow/auth/pkg/http/routes"
 	"github.com/oarkflow/auth/pkg/libs"
 	"github.com/oarkflow/auth/pkg/objects"
 	"github.com/oarkflow/auth/pkg/storage"
 	"github.com/oarkflow/auth/pkg/utils"
-	"github.com/oarkflow/squealx"
-	"github.com/oarkflow/squealx/drivers/sqlite"
 )
 
 //go:embed auth
@@ -31,6 +32,7 @@ type Plugin struct {
 	SendNotification      libs.NotificationHandler
 	DisabledRoutesHandler func() []string
 	DisableSchemas        bool
+	DBReset               bool
 }
 
 func (p *Plugin) Register() {
@@ -47,7 +49,7 @@ func (p *Plugin) Register() {
 		}
 		db = sqliteDB
 	}
-	vault, err := storage.NewDatabaseStorage(db, p.DisableSchemas)
+	vault, err := storage.NewDatabaseStorage(db, p.DisableSchemas, p.DBReset)
 	if err != nil {
 		log.Fatalf("Failed to initialize DatabaseVaultStorage: %v", err)
 	}
@@ -86,6 +88,12 @@ type Option func(*Plugin)
 func WithPrefix(prefix string) Option {
 	return func(p *Plugin) {
 		p.Prefix = prefix
+	}
+}
+
+func WithDBReset(reset bool) Option {
+	return func(p *Plugin) {
+		p.DBReset = reset
 	}
 }
 

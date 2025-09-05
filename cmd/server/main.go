@@ -14,12 +14,13 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 
+	"github.com/oarkflow/squealx"
+	"github.com/oarkflow/squealx/connection"
+
 	v2 "github.com/oarkflow/auth"
 	"github.com/oarkflow/auth/pkg/config"
 	"github.com/oarkflow/auth/pkg/libs"
 	"github.com/oarkflow/auth/pkg/objects"
-	"github.com/oarkflow/squealx"
-	"github.com/oarkflow/squealx/connection"
 )
 
 func main() {
@@ -47,8 +48,8 @@ func main() {
 		v2.WithLoginSuccessURL("/app"),
 		v2.WithNotificationHandler(libs.NotificationHandler{}),
 		v2.WithApp(app),
-		v2.WithDisableSchemas(true),
 		v2.WithDB(db),
+		v2.WithDBReset(true),
 	)
 	authPlugin.Register()
 	if err := app.Listen(":3000"); err != nil {
