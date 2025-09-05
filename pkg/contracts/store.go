@@ -11,13 +11,13 @@ type Storage interface {
 	SetUserInfo(pubHex string, info models.UserInfo) error
 	GetUserInfo(pubHex string) (models.UserInfo, error)
 	GetUserInfoByUsername(username string) (models.UserInfo, error)
-	SetUserSecret(userID int64, secret string) error
+	SetUserSecret(userID int64, credential string) error
 	GetUserSecret(userID int64) (string, error)
 	SetVerificationToken(username, token string, expiresAt int64) error
 	VerifyToken(username, token string) (bool, error)
 	SetUserPublicKey(userID int64, pubKeyX, pubKeyY string) error
 	GetUserPublicKey(userID int64) (map[string]string, error)
-	SetUserMFA(userID int64, secret string, backupCodes []string) error
+	SetUserMFA(userID int64, credential string, backupCodes []string) error
 	GetUserMFA(userID int64) (string, []string, error)
 	EnableMFA(userID int64) error
 	DisableMFA(userID int64) error
@@ -37,4 +37,7 @@ type Storage interface {
 	GetRecentLoginAttempts(identifier string, since time.Time) ([]models.LoginAttempt, error)
 	ClearOldLoginAttempts(before time.Time) error
 	IsLoginBlocked(identifier string, maxAttempts int, window time.Duration) (bool, error)
+
+	// Database reset method
+	Reset() error
 }

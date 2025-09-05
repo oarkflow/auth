@@ -12,13 +12,23 @@ type RateLimiter struct {
 }
 
 type UserInfo struct {
-	UserID         int64    `db:"user_id"`
-	PubHex         string   `db:"pub_hex"`
-	Username       string   `db:"username"`
-	LoginType      string   `db:"login_type"`
-	MFAEnabled     bool     `db:"mfa_enabled"`
-	MFASecret      string   `db:"mfa_secret"`
-	MFABackupCodes []string `db:"mfa_backup_codes"`
+	UserID         int64      `db:"user_id"`
+	PubHex         string     `db:"pub_hex"`
+	Username       string     `db:"username"`
+	Name           string     `db:"name"`
+	FirstName      string     `db:"first_name"`
+	MiddleName     string     `db:"middle_name"`
+	LastName       string     `db:"last_name"`
+	Status         string     `db:"status"`
+	LoginType      string     `db:"login_type"`
+	MFAEnabled     bool       `db:"mfa_enabled"`
+	IsActive       bool       `db:"is_active"`
+	FailedAttempts int        `db:"failed_attempts"`
+	LockedUntil    *time.Time `db:"locked_until"`
+	CreatedAt      time.Time  `db:"created_at"`
+	UpdatedAt      time.Time  `db:"updated_at"`
+	MFASecret      string     `db:"mfa_secret"`
+	MFABackupCodes []string   `db:"mfa_backup_codes"`
 }
 
 type SchnorrProof struct {

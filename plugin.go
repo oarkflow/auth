@@ -9,15 +9,14 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
 
-	"github.com/oarkflow/squealx"
-	"github.com/oarkflow/squealx/drivers/sqlite"
-
 	"github.com/oarkflow/auth/pkg/http/middlewares"
 	"github.com/oarkflow/auth/pkg/http/routes"
 	"github.com/oarkflow/auth/pkg/libs"
 	"github.com/oarkflow/auth/pkg/objects"
 	"github.com/oarkflow/auth/pkg/storage"
 	"github.com/oarkflow/auth/pkg/utils"
+	"github.com/oarkflow/squealx"
+	"github.com/oarkflow/squealx/drivers/sqlite"
 )
 
 //go:embed auth

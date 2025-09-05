@@ -90,6 +90,11 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 			pub_hex VARCHAR(255) PRIMARY KEY,
 			username VARCHAR(255) UNIQUE NOT NULL,
 			user_id BIGINT NOT NULL,
+			name VARCHAR(255),
+			first_name VARCHAR(255),
+			middle_name VARCHAR(255),
+			last_name VARCHAR(255),
+			status VARCHAR(20),
 			login_type ENUM('simple', 'secured') DEFAULT 'simple',
 			mfa_enabled TINYINT(1) DEFAULT 0,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -109,6 +114,8 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 			metadata TEXT,
 			secret_type VARCHAR(50) DEFAULT 'password' NOT NULL,
 			integration_type VARCHAR(100),
+			provider_type VARCHAR(100),
+			is_json TINYINT(1) DEFAULT 0,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY (user_id, secret_type),
@@ -139,7 +146,7 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 		`CREATE TABLE IF NOT EXISTS login_attempts (
 			id BIGINT PRIMARY KEY AUTO_INCREMENT,
 			identifier VARCHAR(255) NOT NULL,
-			ip_address VARCHAR(45),
+			ip_address VARCHAR(100),
 			user_agent TEXT,
 			success TINYINT(1) DEFAULT 0,
 			attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -153,7 +160,7 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 			user_id VARCHAR(255),
 			action VARCHAR(100) NOT NULL,
 			resource VARCHAR(255),
-			ip_address VARCHAR(45),
+			ip_address VARCHAR(100),
 			user_agent TEXT,
 			success TINYINT(1),
 			error_message TEXT,
@@ -178,6 +185,11 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 			pub_hex VARCHAR(255) PRIMARY KEY,
 			username VARCHAR(255) UNIQUE NOT NULL,
 			user_id BIGINT NOT NULL,
+			name VARCHAR(255),
+			first_name VARCHAR(255),
+			middle_name VARCHAR(255),
+			last_name VARCHAR(255),
+			status VARCHAR(20),
 			login_type login_type_enum DEFAULT 'simple',
 			mfa_enabled BOOLEAN DEFAULT FALSE,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -193,6 +205,8 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 			metadata TEXT,
 			secret_type VARCHAR(50) DEFAULT 'password' NOT NULL,
 			integration_type VARCHAR(100),
+			provider_type VARCHAR(100),
+			is_json BOOLEAN DEFAULT FALSE,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (user_id, secret_type)
@@ -218,7 +232,7 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 		`CREATE TABLE IF NOT EXISTS login_attempts (
 			id BIGSERIAL PRIMARY KEY,
 			identifier VARCHAR(255) NOT NULL,
-			ip_address INET,
+			ip_address VARCHAR(100),
 			user_agent TEXT,
 			success BOOLEAN DEFAULT FALSE,
 			attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -229,7 +243,7 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 			user_id VARCHAR(255),
 			action VARCHAR(100) NOT NULL,
 			resource VARCHAR(255),
-			ip_address INET,
+			ip_address VARCHAR(100),
 			user_agent TEXT,
 			success BOOLEAN,
 			error_message TEXT,
@@ -259,6 +273,11 @@ func (d *DatabaseStorage) getSQLiteSchema() []string {
 			pub_hex TEXT PRIMARY KEY,
 			username TEXT UNIQUE NOT NULL,
 			user_id INTEGER NOT NULL,
+			name TEXT,
+			first_name TEXT,
+			middle_name TEXT,
+			last_name TEXT,
+			status TEXT,
 			login_type TEXT DEFAULT 'simple' CHECK (login_type IN ('simple', 'secured')),
 			mfa_enabled INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -274,6 +293,8 @@ func (d *DatabaseStorage) getSQLiteSchema() []string {
 			metadata TEXT,
 			secret_type TEXT DEFAULT 'password' NOT NULL,
 			integration_type TEXT,
+			provider_type TEXT,
+			is_json INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (user_id, secret_type)
@@ -385,15 +406,23 @@ func (d *DatabaseStorage) upsertUser(pubHex string, info models.UserInfo) error 
 	// First, try to update existing record
 	updateQuery := `
 		UPDATE users
-		SET username = :username, user_id = :user_id, login_type = :login_type, mfa_enabled = :mfa_enabled, updated_at = CURRENT_TIMESTAMP
+		SET username = :username, user_id = :user_id, name = :name, first_name = :first_name, middle_name = :middle_name, last_name = :last_name, status = :status, login_type = :login_type, mfa_enabled = :mfa_enabled, is_active = :is_active, failed_attempts = :failed_attempts, locked_until = :locked_until, updated_at = CURRENT_TIMESTAMP
 		WHERE pub_hex = :pub_hex`
 
 	updateParams := map[string]any{
-		"username":    info.Username,
-		"user_id":     info.UserID,
-		"login_type":  info.LoginType,
-		"mfa_enabled": d.convertBoolForDB(info.MFAEnabled),
-		"pub_hex":     pubHex,
+		"username":        info.Username,
+		"user_id":         info.UserID,
+		"name":            info.Name,
+		"first_name":      info.FirstName,
+		"middle_name":     info.MiddleName,
+		"last_name":       info.LastName,
+		"status":          info.Status,
+		"login_type":      info.LoginType,
+		"mfa_enabled":     d.convertBoolForDB(info.MFAEnabled),
+		"is_active":       d.convertBoolForDB(info.IsActive),
+		"failed_attempts": info.FailedAttempts,
+		"locked_until":    info.LockedUntil,
+		"pub_hex":         pubHex,
 	}
 
 	result, err := d.db.NamedExec(updateQuery, updateParams)
@@ -410,15 +439,23 @@ func (d *DatabaseStorage) upsertUser(pubHex string, info models.UserInfo) error 
 	// If no rows were updated, insert new record
 	if rowsAffected == 0 {
 		insertQuery := `
-			INSERT INTO users (pub_hex, username, user_id, login_type, mfa_enabled)
-			VALUES (:pub_hex, :username, :user_id, :login_type, :mfa_enabled)`
+			INSERT INTO users (pub_hex, username, user_id, name, first_name, middle_name, last_name, status, login_type, mfa_enabled, is_active, failed_attempts, locked_until)
+			VALUES (:pub_hex, :username, :user_id, :name, :first_name, :middle_name, :last_name, :status, :login_type, :mfa_enabled, :is_active, :failed_attempts, :locked_until)`
 
 		insertParams := map[string]any{
-			"pub_hex":     pubHex,
-			"username":    info.Username,
-			"user_id":     info.UserID,
-			"login_type":  info.LoginType,
-			"mfa_enabled": d.convertBoolForDB(info.MFAEnabled),
+			"pub_hex":         pubHex,
+			"username":        info.Username,
+			"user_id":         info.UserID,
+			"name":            info.Name,
+			"first_name":      info.FirstName,
+			"middle_name":     info.MiddleName,
+			"last_name":       info.LastName,
+			"status":          info.Status,
+			"login_type":      info.LoginType,
+			"mfa_enabled":     d.convertBoolForDB(info.MFAEnabled),
+			"is_active":       d.convertBoolForDB(info.IsActive),
+			"failed_attempts": info.FailedAttempts,
+			"locked_until":    info.LockedUntil,
 		}
 
 		_, err = d.db.NamedExec(insertQuery, insertParams)
@@ -565,18 +602,12 @@ func (d *DatabaseStorage) SetUserInfo(pubHex string, info models.UserInfo) error
 }
 
 func (d *DatabaseStorage) GetUserInfo(pubHex string) (models.UserInfo, error) {
-	query := `SELECT user_id, username, login_type, mfa_enabled, pub_hex FROM users WHERE pub_hex = :pub_hex`
+	query := `SELECT user_id, username, name, first_name, middle_name, last_name, status, login_type, mfa_enabled, is_active, failed_attempts, locked_until, created_at, updated_at, pub_hex FROM users WHERE pub_hex = :pub_hex`
 	params := map[string]any{
 		"pub_hex": pubHex,
 	}
 
-	var rawResult struct {
-		PubHex     string `db:"pub_hex"`
-		UserID     int64  `db:"user_id"`
-		Username   string `db:"username"`
-		LoginType  string `db:"login_type"`
-		MFAEnabled any    `db:"mfa_enabled"`
-	}
+	var rawResult models.UserInfo
 
 	err := d.db.NamedGet(&rawResult, query, params)
 	if err != nil {
@@ -584,29 +615,33 @@ func (d *DatabaseStorage) GetUserInfo(pubHex string) (models.UserInfo, error) {
 	}
 
 	info := models.UserInfo{
-		UserID:     rawResult.UserID,
-		Username:   rawResult.Username,
-		LoginType:  rawResult.LoginType,
-		MFAEnabled: d.convertBoolFromDB(rawResult.MFAEnabled),
-		PubHex:     rawResult.PubHex,
+		UserID:         rawResult.UserID,
+		Username:       rawResult.Username,
+		Name:           rawResult.Name,
+		FirstName:      rawResult.FirstName,
+		MiddleName:     rawResult.MiddleName,
+		LastName:       rawResult.LastName,
+		Status:         rawResult.Status,
+		LoginType:      rawResult.LoginType,
+		MFAEnabled:     d.convertBoolFromDB(rawResult.MFAEnabled),
+		IsActive:       d.convertBoolFromDB(rawResult.IsActive),
+		FailedAttempts: rawResult.FailedAttempts,
+		LockedUntil:    rawResult.LockedUntil,
+		CreatedAt:      rawResult.CreatedAt,
+		UpdatedAt:      rawResult.UpdatedAt,
+		PubHex:         rawResult.PubHex,
 	}
 
 	return info, nil
 }
 
 func (d *DatabaseStorage) GetUserInfoByUsername(username string) (models.UserInfo, error) {
-	query := `SELECT user_id, username, login_type, mfa_enabled, pub_hex FROM users WHERE username = :username`
+	query := `SELECT user_id, username, name, first_name, middle_name, last_name, status, login_type, mfa_enabled, is_active, failed_attempts, locked_until, created_at, updated_at, pub_hex FROM users WHERE username = :username`
 	params := map[string]any{
 		"username": username,
 	}
 
-	var rawResult struct {
-		PubHex     string `db:"pub_hex"`
-		UserID     int64  `db:"user_id"`
-		Username   string `db:"username"`
-		LoginType  string `db:"login_type"`
-		MFAEnabled any    `db:"mfa_enabled"`
-	}
+	var rawResult models.UserInfo
 
 	err := d.db.NamedGet(&rawResult, query, params)
 	if err != nil {
@@ -614,11 +649,21 @@ func (d *DatabaseStorage) GetUserInfoByUsername(username string) (models.UserInf
 	}
 
 	info := models.UserInfo{
-		UserID:     rawResult.UserID,
-		Username:   rawResult.Username,
-		LoginType:  rawResult.LoginType,
-		MFAEnabled: d.convertBoolFromDB(rawResult.MFAEnabled),
-		PubHex:     rawResult.PubHex,
+		UserID:         rawResult.UserID,
+		Username:       rawResult.Username,
+		Name:           rawResult.Name,
+		FirstName:      rawResult.FirstName,
+		MiddleName:     rawResult.MiddleName,
+		LastName:       rawResult.LastName,
+		Status:         rawResult.Status,
+		LoginType:      rawResult.LoginType,
+		MFAEnabled:     d.convertBoolFromDB(rawResult.MFAEnabled),
+		IsActive:       d.convertBoolFromDB(rawResult.IsActive),
+		FailedAttempts: rawResult.FailedAttempts,
+		LockedUntil:    rawResult.LockedUntil,
+		CreatedAt:      rawResult.CreatedAt,
+		UpdatedAt:      rawResult.UpdatedAt,
+		PubHex:         rawResult.PubHex,
 	}
 
 	return info, nil
