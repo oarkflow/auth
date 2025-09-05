@@ -47,6 +47,7 @@ func main() {
 		v2.WithLoginSuccessURL("/app"),
 		v2.WithNotificationHandler(libs.NotificationHandler{}),
 		v2.WithApp(app),
+		v2.WithDisableSchemas(true),
 		v2.WithDB(db),
 	)
 	authPlugin.Register()

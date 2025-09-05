@@ -24,24 +24,28 @@ const (
 
 // DatabaseStorage struct with database type awareness
 type DatabaseStorage struct {
-	db     *squealx.DB
-	dbType DatabaseType
+	db             *squealx.DB
+	dbType         DatabaseType
+	DisableSchemas bool
 }
 
 // NewDatabaseStorage creates a new database storage instance
-func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
+func NewDatabaseStorage(db *squealx.DB, disableSchemas bool) (*DatabaseStorage, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database connection is nil")
 	}
 
 	storage := &DatabaseStorage{
-		db:     db,
-		dbType: DatabaseType(db.DriverName()),
+		db:             db,
+		dbType:         DatabaseType(db.DriverName()),
+		DisableSchemas: disableSchemas,
 	}
 
-	// Create tables with database-specific schema
-	if err := storage.createTables(); err != nil {
-		return nil, fmt.Errorf("failed to create database schema: %w", err)
+	// Create tables with database-specific schema only if not disabled
+	if !disableSchemas {
+		if err := storage.createTables(); err != nil {
+			return nil, fmt.Errorf("failed to create database schema: %w", err)
+		}
 	}
 
 	return storage, nil
@@ -49,6 +53,10 @@ func NewDatabaseStorage(db *squealx.DB) (*DatabaseStorage, error) {
 
 // createTables creates database tables with appropriate schema for each database type
 func (d *DatabaseStorage) createTables() error {
+	if d.DisableSchemas {
+		return nil // Skip schema creation if disabled
+	}
+
 	var queries []string
 
 	switch d.dbType {

@@ -1,111 +1,131 @@
-<div class="font-sans bg-emerald-50 dark:bg-gray-900 min-h-screen flex items-center justify-center">
-    <div
-        class="bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl border border-white/20 dark:border-gray-700/20 rounded-3xl p-12 md:p-16 max-w-4xl w-full mx-4 text-center shadow-2xl relative overflow-hidden">
-        <div class="absolute top-0 left-0 right-0 h-1 bg-emerald-500 dark:bg-emerald-600">
-        </div>
+<div class="bg-blue-50 dark:bg-gray-900 min-h-screen">
+    <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full space-y-8">
+            <!-- Header -->
+            <div class="text-center">
+                <div class="mx-auto h-16 w-16 bg-primary-500 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Account Verified!</h1>
+                <p class="mt-2 text-gray-600 dark:text-gray-300">Your secure cryptographic credentials are ready</p>
+            </div>
 
-        <div class="text-6xl mb-8 block animate-successPulse">🎉</div>
-        <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">Account Verified!</h1>
-        <p class="text-xl font-semibold text-emerald-600 dark:text-emerald-400 mb-12">Your secure cryptographic
-            credentials are ready</p>
-
-        <div class="bg-emerald-50 dark:bg-emerald-900/20 border-l-4 border-emerald-500 dark:border-emerald-600 p-6 rounded-xl mb-12 text-left"
-            id="downloadStatus">
-            <h3 class="text-xl font-semibold text-emerald-800 dark:text-emerald-300 mb-4 flex items-center gap-3">
-                <span class="text-2xl">📥</span>
-                Downloading Your Key File...
-            </h3>
-            <p class="text-gray-700 dark:text-gray-300 mb-4">Please wait while we prepare your encrypted credentials
-                file.</p>
-            <div class="bg-emerald-800 dark:bg-emerald-700 h-2 rounded-full overflow-hidden">
-                <div class="h-full bg-emerald-500 dark:bg-emerald-600 rounded-full">
+            <!-- Download Status -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
+                <div id="downloadStatus">
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-3">
+                        <span class="text-2xl">📥</span>
+                        Downloading Your Key File...
+                    </h3>
+                    <p class="text-gray-700 dark:text-gray-300 mb-4">Please wait while we prepare your encrypted
+                        credentials file.</p>
+                    <div class="bg-gray-200 dark:bg-gray-700 h-2 rounded-full overflow-hidden">
+                        <div class="h-full bg-primary-500 rounded-full animate-pulse">
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div
-            class="bg-white/70 dark:bg-gray-800/70 border border-white/30 dark:border-gray-600/30 rounded-2xl p-8 mb-12 text-left">
-            <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-3">
-                <span class="text-2xl">🔐</span>
-                Essential Security Instructions
-            </h3>
-            <div
-                class="mb-6 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-600 p-4 rounded-lg text-sm text-blue-700 dark:text-blue-300">
-                <strong>Note:</strong> You must save your <span class="font-semibold">credentials.json</span> file
-                securely. It is required for all future logins and password resets.
+            <!-- Security Instructions -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center gap-3">
+                    <span class="text-2xl">🔐</span>
+                    Essential Security Instructions
+                </h3>
+                <div
+                    class="mb-6 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400 dark:border-blue-600 p-4 rounded-lg text-sm text-blue-700 dark:text-blue-300">
+                    <strong>Note:</strong> You must save your <span class="font-semibold">credentials.json</span> file
+                    securely. It is required for all future logins and password resets.
+                </div>
+                <ul class="space-y-4">
+                    <li class="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <div
+                            class="bg-primary-500 text-white w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            1</div>
+                        <div class="text-gray-700 dark:text-gray-300 leading-relaxed">
+                            <strong class="text-gray-900 dark:text-white">Save Securely:</strong> Store your
+                            credentials.json file in a secure location, preferably encrypted storage or a password
+                            manager.
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <div
+                            class="bg-primary-500 text-white w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            2</div>
+                        <div class="text-gray-700 dark:text-gray-300 leading-relaxed">
+                            <strong class="text-gray-900 dark:text-white">Remember Password:</strong> Your password is
+                            required to decrypt the private key for login. Store it safely.
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <div
+                            class="bg-primary-500 text-white w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            3</div>
+                        <div class="text-gray-700 dark:text-gray-300 leading-relaxed">
+                            <strong class="text-gray-900 dark:text-white">Backup Copies:</strong> Create secure backups
+                            of both your key file and password in separate locations.
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <div
+                            class="bg-primary-500 text-white w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            4</div>
+                        <div class="text-gray-700 dark:text-gray-300 leading-relaxed">
+                            <strong class="text-gray-900 dark:text-white">Never Share:</strong> Your key file and
+                            password should never be shared with anyone or transmitted over insecure channels.
+                        </div>
+                    </li>
+                </ul>
             </div>
-            <ul class="space-y-4">
-                <li
-                    class="flex items-start gap-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border-l-4 border-emerald-500 dark:border-emerald-600">
-                    <div
-                        class="bg-emerald-500 text-white w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                        1</div>
-                    <div class="text-gray-700 dark:text-gray-300 leading-relaxed">
-                        <strong class="text-gray-900 dark:text-white">Save Securely:</strong> Store your
-                        credentials.json file in a
-                        secure location, preferably encrypted storage or a password manager.
-                    </div>
-                </li>
-                <li
-                    class="flex items-start gap-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border-l-4 border-emerald-500 dark:border-emerald-600">
-                    <div
-                        class="bg-emerald-500 text-white w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                        2</div>
-                    <div class="text-gray-700 dark:text-gray-300 leading-relaxed">
-                        <strong class="text-gray-900 dark:text-white">Remember Password:</strong> Your password is
-                        required to decrypt
-                        the private key for login. Store it safely.
-                    </div>
-                </li>
-                <li
-                    class="flex items-start gap-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border-l-4 border-emerald-500 dark:border-emerald-600">
-                    <div
-                        class="bg-emerald-500 text-white w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                        3</div>
-                    <div class="text-gray-700 dark:text-gray-300 leading-relaxed">
-                        <strong class="text-gray-900 dark:text-white">Backup Copies:</strong> Create secure backups of
-                        both your key
-                        file and password in separate locations.
-                    </div>
-                </li>
-                <li
-                    class="flex items-start gap-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border-l-4 border-emerald-500 dark:border-emerald-600">
-                    <div
-                        class="bg-emerald-500 text-white w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                        4</div>
-                    <div class="text-gray-700 dark:text-gray-300 leading-relaxed">
-                        <strong class="text-gray-900 dark:text-white">Never Share:</strong> Your key file and password
-                        should never be
-                        shared with anyone or transmitted over insecure channels.
-                    </div>
-                </li>
-            </ul>
-        </div>
 
-        <div
-            class="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 dark:border-yellow-600 p-6 rounded-xl mb-8">
-            <h4 class="text-lg font-semibold text-yellow-800 dark:text-yellow-300 mb-3 flex items-center gap-3">
-                <span class="text-2xl">⚠️</span>
-                Important Notice
-            </h4>
-            <p class="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">If you lose both your key file and
-                password, you will not
-                be able to access your account. There is no password recovery for cryptographic authentication. Please
-                ensure you have secure backups.</p>
-        </div>
+            <!-- Important Notice -->
+            <div
+                class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-yellow-400 dark:text-yellow-500" fill="currentColor"
+                            viewBox="0 0 20 20">
+                            <path fill-rule="evenodd"
+                                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                                clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h4 class="text-sm font-medium text-yellow-800 dark:text-yellow-300">Important Notice</h4>
+                        <p class="mt-2 text-sm text-yellow-700 dark:text-yellow-200">If you lose both your key file and
+                            password, you will not be able to access your account. There is no password recovery for
+                            cryptographic authentication. Please ensure you have secure backups.</p>
+                    </div>
+                </div>
+            </div>
 
-        <div class="flex flex-col sm:flex-row gap-6 justify-center items-center">
-            <a href="{{uris.Login}}"
-                class="bg-emerald-500 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-emerald-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 flex items-center gap-3 min-w-48 justify-center hidden"
-                id="continueBtn">
-                <span class="text-xl">🚀</span>
-                Continue to Login
-            </a>
-            <a href="{{uris.Landing}}"
-                class="bg-blue-500 text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 flex items-center gap-3 min-w-48 justify-center">
-                <span class="text-xl">🏠</span>
-                Back to Home
-            </a>
+            <!-- Action Buttons -->
+            <div class="text-center space-y-3">
+                <div>
+                    <button type="button" onclick="window.location.href='{{uris.Login}}'"
+                        class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200 hidden"
+                        id="continueBtn">
+                        <span class="absolute left-0 inset-y-0 flex items-center pl-3">
+                            <svg class="h-5 w-5 text-primary-500 group-hover:text-primary-400" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                            </svg>
+                        </span>
+                        Continue to Login
+                    </button>
+                </div>
+                <div>
+                    <a href="{{uris.Landing}}"
+                        class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+                        ← Back to home
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -127,7 +147,7 @@
                 // Update UI after download
                 setTimeout(() => {
                     document.getElementById('downloadStatus').innerHTML =
-                        '<h3 class="text-xl font-semibold text-emerald-800 mb-4 flex items-center gap-3"><span class="text-2xl">✅</span> Download Complete!</h3><p class="text-gray-700">Your encrypted key file has been saved to your downloads folder.</p>';
+                        '<h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-3"><span class="text-2xl">✅</span> Download Complete!</h3><p class="text-gray-700 dark:text-gray-300">Your encrypted key file has been saved to your downloads folder.</p>';
                     document.getElementById('continueBtn').classList.remove('hidden');
                 }, 500);
             }, 2000);

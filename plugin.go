@@ -30,6 +30,7 @@ type Plugin struct {
 	DB                    *squealx.DB
 	SendNotification      libs.NotificationHandler
 	DisabledRoutesHandler func() []string
+	DisableSchemas        bool
 }
 
 func (p *Plugin) Register() {
@@ -46,7 +47,7 @@ func (p *Plugin) Register() {
 		}
 		db = sqliteDB
 	}
-	vault, err := storage.NewDatabaseStorage(db)
+	vault, err := storage.NewDatabaseStorage(db, p.DisableSchemas)
 	if err != nil {
 		log.Fatalf("Failed to initialize DatabaseVaultStorage: %v", err)
 	}
@@ -85,6 +86,12 @@ type Option func(*Plugin)
 func WithPrefix(prefix string) Option {
 	return func(p *Plugin) {
 		p.Prefix = prefix
+	}
+}
+
+func WithDisableSchemas(disable bool) Option {
+	return func(p *Plugin) {
+		p.DisableSchemas = disable
 	}
 }
 
