@@ -130,10 +130,15 @@ func VerifyPage(c *fiber.Ctx) error {
 	pubx, puby, privd := libs.GenerateKeyPair()
 	pubHex := libs.PadHex(pubx) + ":" + libs.PadHex(puby)
 	info := models.UserInfo{
-		UserID:    wuid.New().Int64(),
-		Username:  username,
-		LoginType: loginType,
-		PubHex:    pubHex,
+		UserID:     wuid.New().Int64(),
+		Username:   username,
+		LoginType:  loginType,
+		PubHex:     pubHex,
+		Name:       "",
+		FirstName:  "",
+		MiddleName: "",
+		LastName:   "",
+		Status:     "active",
 	}
 	objects.Manager.Vault().SetUserInfo(pubHex, info)
 	objects.Manager.Vault().SetUserPublicKey(info.UserID, libs.PadHex(pubx), libs.PadHex(puby))
@@ -554,7 +559,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	// Phase 1: Add rate limiting for secured login
 	clientIP := utils.GetClientIP(c)
 	pubHex := pubx + ":" + puby
-	loginIdentifier := fmt.Sprintf("%s:%s", clientIP, pubHex)
+	loginIdentifier := fmt.Sprintf("%s:%s", clientIP, username)
 
 	// Check if login is blocked for this key/IP combination
 	if objects.Manager.Security().IsLoginBlocked(loginIdentifier) {

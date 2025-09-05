@@ -110,17 +110,17 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 
 		`CREATE TABLE IF NOT EXISTS credentials (
 			user_id BIGINT NOT NULL,
-			secret TEXT NOT NULL,
+			credential TEXT NOT NULL,
 			metadata TEXT,
-			secret_type VARCHAR(50) DEFAULT 'password' NOT NULL,
+			credential_type VARCHAR(50) DEFAULT 'password' NOT NULL,
 			integration_type VARCHAR(100),
 			provider_type VARCHAR(100),
 			is_json TINYINT(1) DEFAULT 0,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			PRIMARY KEY (user_id, secret_type),
+			PRIMARY KEY (user_id, credential_type),
 			INDEX idx_credentials_user_id (user_id),
-			INDEX idx_credentials_secret_type (secret_type)
+			INDEX idx_credentials_credential_type (credential_type)
 		) ENGINE=InnoDB`,
 
 		`CREATE TABLE IF NOT EXISTS verification_tokens (
@@ -201,15 +201,15 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 
 		`CREATE TABLE IF NOT EXISTS credentials (
 			user_id BIGINT NOT NULL,
-			secret TEXT NOT NULL,
+			credential TEXT NOT NULL,
 			metadata TEXT,
-			secret_type VARCHAR(50) DEFAULT 'password' NOT NULL,
+			credential_type VARCHAR(50) DEFAULT 'password' NOT NULL,
 			integration_type VARCHAR(100),
 			provider_type VARCHAR(100),
 			is_json BOOLEAN DEFAULT FALSE,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (user_id, secret_type)
+			PRIMARY KEY (user_id, credential_type)
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS verification_tokens (
@@ -256,7 +256,7 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 		`CREATE INDEX IF NOT EXISTS idx_users_login_type ON users(login_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active)`,
 		`CREATE INDEX IF NOT EXISTS idx_credentials_user_id ON credentials(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_credentials_secret_type ON credentials(secret_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_credentials_credential_type ON credentials(credential_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_verification_tokens_username ON verification_tokens(username)`,
 		`CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token)`,
 		`CREATE INDEX IF NOT EXISTS idx_pending_registrations_username ON pending_registrations(username)`,
@@ -289,15 +289,15 @@ func (d *DatabaseStorage) getSQLiteSchema() []string {
 
 		`CREATE TABLE IF NOT EXISTS credentials (
 			user_id INTEGER NOT NULL,
-			secret TEXT NOT NULL,
+			credential TEXT NOT NULL,
 			metadata TEXT,
-			secret_type TEXT DEFAULT 'password' NOT NULL,
+			credential_type TEXT DEFAULT 'password' NOT NULL,
 			integration_type TEXT,
 			provider_type TEXT,
 			is_json INTEGER DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (user_id, secret_type)
+			PRIMARY KEY (user_id, credential_type)
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS verification_tokens (
@@ -344,7 +344,7 @@ func (d *DatabaseStorage) getSQLiteSchema() []string {
 		`CREATE INDEX IF NOT EXISTS idx_users_login_type ON users(login_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active)`,
 		`CREATE INDEX IF NOT EXISTS idx_credentials_user_id ON credentials(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_credentials_secret_type ON credentials(secret_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_credentials_credential_type ON credentials(credential_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_verification_tokens_username ON verification_tokens(username)`,
 		`CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token)`,
 		`CREATE INDEX IF NOT EXISTS idx_pending_registrations_username ON pending_registrations(username)`,
@@ -466,18 +466,18 @@ func (d *DatabaseStorage) upsertUser(pubHex string, info models.UserInfo) error 
 }
 
 // upsertCredential performs database-agnostic upsert operation for credentials
-func (d *DatabaseStorage) upsertCredential(userID int64, secret, secretType, metadata string) error {
+func (d *DatabaseStorage) upsertCredential(userID int64, credential, credentialType, metadata string) error {
 	// First, try to update existing record
 	updateQuery := `
 		UPDATE credentials
-		SET secret = :secret, metadata = :metadata, updated_at = CURRENT_TIMESTAMP
-		WHERE user_id = :user_id AND secret_type = :secret_type`
+		SET credential = :credential, metadata = :metadata, updated_at = CURRENT_TIMESTAMP
+		WHERE user_id = :user_id AND credential_type = :credential_type`
 
 	updateParams := map[string]any{
-		"secret":      secret,
-		"metadata":    metadata,
-		"user_id":     userID,
-		"secret_type": secretType,
+		"credential":      credential,
+		"metadata":        metadata,
+		"user_id":         userID,
+		"credential_type": credentialType,
 	}
 
 	result, err := d.db.NamedExec(updateQuery, updateParams)
@@ -494,14 +494,14 @@ func (d *DatabaseStorage) upsertCredential(userID int64, secret, secretType, met
 	// If no rows were updated, insert new record
 	if rowsAffected == 0 {
 		insertQuery := `
-			INSERT INTO credentials (user_id, secret, secret_type, metadata)
-			VALUES (:user_id, :secret, :secret_type, :metadata)`
+			INSERT INTO credentials (user_id, credential, credential_type, metadata)
+			VALUES (:user_id, :credential, :credential_type, :metadata)`
 
 		insertParams := map[string]any{
-			"user_id":     userID,
-			"secret":      secret,
-			"secret_type": secretType,
-			"metadata":    metadata,
+			"user_id":         userID,
+			"credential":      credential,
+			"credential_type": credentialType,
+			"metadata":        metadata,
 		}
 
 		_, err = d.db.NamedExec(insertQuery, insertParams)
@@ -669,23 +669,23 @@ func (d *DatabaseStorage) GetUserInfoByUsername(username string) (models.UserInf
 	return info, nil
 }
 
-func (d *DatabaseStorage) SetUserSecret(userID int64, secret string) error {
-	return d.upsertCredential(userID, secret, "password", "")
+func (d *DatabaseStorage) SetUserSecret(userID int64, credential string) error {
+	return d.upsertCredential(userID, credential, "password", "")
 }
 
 func (d *DatabaseStorage) GetUserSecret(userID int64) (string, error) {
-	query := `SELECT secret FROM credentials WHERE user_id = :user_id AND secret_type = :secret_type`
+	query := `SELECT credential FROM credentials WHERE user_id = :user_id AND credential_type = :credential_type`
 	params := map[string]any{
-		"user_id":     userID,
-		"secret_type": "password",
+		"user_id":         userID,
+		"credential_type": "password",
 	}
 
-	var secret string
-	err := d.db.NamedGet(&secret, query, params)
+	var credential string
+	err := d.db.NamedGet(&credential, query, params)
 	if err != nil {
 		return "", err
 	}
-	return secret, nil
+	return credential, nil
 }
 
 func (d *DatabaseStorage) SetUserPublicKey(userID int64, pubKeyX, pubKeyY string) error {
@@ -697,40 +697,40 @@ func (d *DatabaseStorage) SetUserPublicKey(userID int64, pubKeyX, pubKeyY string
 }
 
 func (d *DatabaseStorage) GetUserPublicKey(userID int64) (map[string]string, error) {
-	query := `SELECT secret FROM credentials WHERE user_id = :user_id AND secret_type = :secret_type`
+	query := `SELECT credential FROM credentials WHERE user_id = :user_id AND credential_type = :credential_type`
 	params := map[string]any{
-		"user_id":     userID,
-		"secret_type": "public_key",
+		"user_id":         userID,
+		"credential_type": "public_key",
 	}
 
-	var secret string
-	err := d.db.NamedGet(&secret, query, params)
+	var credential string
+	err := d.db.NamedGet(&credential, query, params)
 	if err != nil {
 		return nil, err
 	}
 
 	var pubKey map[string]string
-	if err := json.Unmarshal([]byte(secret), &pubKey); err != nil {
+	if err := json.Unmarshal([]byte(credential), &pubKey); err != nil {
 		return nil, err
 	}
 	return pubKey, nil
 }
 
-func (d *DatabaseStorage) SetUserMFA(userID int64, secret string, backupCodes []string) error {
+func (d *DatabaseStorage) SetUserMFA(userID int64, credential string, backupCodes []string) error {
 	backupCodesJSON, _ := json.Marshal(backupCodes)
-	return d.upsertCredential(userID, secret, "mfa", string(backupCodesJSON))
+	return d.upsertCredential(userID, credential, "mfa", string(backupCodesJSON))
 }
 
 func (d *DatabaseStorage) GetUserMFA(userID int64) (string, []string, error) {
-	query := `SELECT secret, COALESCE(metadata, '') as metadata FROM credentials WHERE user_id = :user_id AND secret_type = :secret_type`
+	query := `SELECT credential, COALESCE(metadata, '') as metadata FROM credentials WHERE user_id = :user_id AND credential_type = :credential_type`
 	params := map[string]any{
-		"user_id":     userID,
-		"secret_type": "mfa",
+		"user_id":         userID,
+		"credential_type": "mfa",
 	}
 
 	var result struct {
-		Secret   string `db:"secret"`
-		Metadata string `db:"metadata"`
+		Credential string `db:"credential"`
+		Metadata   string `db:"metadata"`
 	}
 
 	err := d.db.NamedGet(&result, query, params)
@@ -742,7 +742,7 @@ func (d *DatabaseStorage) GetUserMFA(userID int64) (string, []string, error) {
 	if result.Metadata != "" {
 		json.Unmarshal([]byte(result.Metadata), &backupCodes)
 	}
-	return result.Secret, backupCodes, nil
+	return result.Credential, backupCodes, nil
 }
 
 func (d *DatabaseStorage) EnableMFA(userID int64) error {
