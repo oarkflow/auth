@@ -401,19 +401,20 @@ func ValidatePhone(phone string) error {
 
 // AuditAction constants for consistent action names
 const (
-	AuditActionLoginAttempt    = "login_attempt"
-	AuditActionLoginSuccess    = "login_success"
-	AuditActionLoginFailed     = "login_failed"
-	AuditActionLogout          = "logout"
-	AuditActionRegister        = "register"
-	AuditActionVerifyEmail     = "verify_email"
-	AuditActionVerifySMS       = "verify_sms"
-	AuditActionPasswordReset   = "password_reset"
-	AuditActionMFASetup        = "mfa_setup"
-	AuditActionMFADisable      = "mfa_disable"
-	AuditActionMFABackupCode   = "mfa_backup_code"
-	AuditActionAccessProtected = "access_protected"
-	AuditActionTokenRefresh    = "token_refresh"
+	AuditActionLoginAttempt       = "login_attempt"
+	AuditActionLoginSuccess       = "login_success"
+	AuditActionLoginFailed        = "login_failed"
+	AuditActionLogout             = "logout"
+	AuditActionRegister           = "register"
+	AuditActionResendVerification = "resend_verification"
+	AuditActionVerifyEmail        = "verify_email"
+	AuditActionVerifySMS          = "verify_sms"
+	AuditActionPasswordReset      = "password_reset"
+	AuditActionMFASetup           = "mfa_setup"
+	AuditActionMFADisable         = "mfa_disable"
+	AuditActionMFABackupCode      = "mfa_backup_code"
+	AuditActionAccessProtected    = "access_protected"
+	AuditActionTokenRefresh       = "token_refresh"
 )
 
 // LogAuditEvent is a utility function to log audit events

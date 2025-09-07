@@ -140,10 +140,25 @@ func VerifyPage(c *fiber.Ctx) error {
 		LastName:   "",
 		Status:     "active",
 	}
-	objects.Manager.Vault().SetUserInfo(pubHex, info)
+	err = objects.Manager.Vault().SetUserInfo(pubHex, info)
+	if err != nil {
+		fmt.Println(err)
+		return renderErrorPage(c, http.StatusInternalServerError, "Account Creation Error",
+			"Failed to create your user account.",
+			"There was an issue creating your account. Please try registering again.",
+			fmt.Sprintf("SetUserInfo failed: %v", err), utils.RegisterURI)
+	}
 	objects.Manager.Vault().SetUserPublicKey(info.UserID, libs.PadHex(pubx), libs.PadHex(puby))
 	objects.Manager.RegisterUserKey(pubHex, []byte(pubx), []byte(puby))
-	objects.Manager.Vault().SetUserSecret(info.UserID, passwordHash)
+	err = objects.Manager.Vault().SetUserSecret(info.UserID, passwordHash)
+	if err != nil {
+		fmt.Println(err)
+		return renderErrorPage(c, http.StatusInternalServerError, "Account Creation Error",
+			"Failed to create your user account.",
+			"There was an issue creating your account. Please try registering again.",
+			fmt.Sprintf("SetUserInfo failed: %v", err), utils.RegisterURI)
+
+	}
 
 	// Invalidate cache for the new user
 	if manager, ok := objects.Manager.(*libs.Manager); ok {
@@ -315,12 +330,22 @@ func PostRegister(c *fiber.Ctx) error {
 			err.Error(),
 			err.Error(), utils.RegisterURI)
 	}
-	// Check if username (email/phone) already exists
+	// Check if username (email/phone) already exists as active user
 	if _, exists := objects.Manager.LookupUserByUsername(username); exists {
 		return renderErrorPage(c, http.StatusConflict, "Username Already Registered",
 			"This username is already associated with an existing account.",
 			"Please try logging in instead, or use a different email address or phone number.",
 			fmt.Sprintf("Username '%s' already exists in database", username), utils.LoginURI)
+	}
+
+	// Check if username has pending registration
+	if _, _, err := objects.Manager.Vault().GetPendingRegistration(username); err == nil {
+		// Pending registration exists, show resend verification page
+		return responses.Render(c, utils.PendingRegistrationTemplate, fiber.Map{
+			"Title":    "Pending Registration",
+			"Username": username,
+			"Message":  "You have a pending registration that needs verification.",
+		})
 	}
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -603,7 +628,20 @@ func PostSecureLogin(c *fiber.Ctx) error {
 
 	// Validate public key from credentials table
 	storedPubX, storedPubY, err := objects.Manager.GetPublicKeyByUserID(info.UserID)
-	if err != nil || storedPubX != pubx || storedPubY != puby {
+	if err != nil {
+		// Phase 1: Record failed login attempt
+		userAgent := c.Get("User-Agent")
+		var uaPtr *string
+		if userAgent != "" {
+			uaPtr = &userAgent
+		}
+		objects.Manager.Security().RecordFailedLogin(loginIdentifier, uaPtr)
+		return renderErrorPage(c, http.StatusUnauthorized, "Account Key Error",
+			"Could not retrieve your account's cryptographic keys.",
+			"There may be an issue with your account setup. Please contact support.",
+			fmt.Sprintf("Public key retrieval failed: %v", err), utils.LoginURI)
+	}
+	if storedPubX != pubx || storedPubY != puby {
 		// Phase 1: Record failed login attempt
 		userAgent := c.Get("User-Agent")
 		var uaPtr *string
@@ -719,6 +757,76 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		return c.Redirect(lastVisited, fiber.StatusSeeOther)
 	}
 	return c.Redirect(uri, fiber.StatusSeeOther)
+}
+
+func PostResendVerification(c *fiber.Ctx) error {
+	var req requests.ResendVerificationRequest
+	if err := c.BodyParser(&req); err != nil {
+		return renderErrorPage(c, http.StatusBadRequest, "Invalid Form Data",
+			"The form data could not be processed.",
+			"Please check your input and try again.",
+			fmt.Sprintf("ParseForm error: %v", err), utils.RegisterURI)
+	}
+	username := utils.SanitizeInput(strings.TrimSpace(req.Username))
+	if username == "" {
+		return renderErrorPage(c, http.StatusBadRequest, "Missing Username",
+			"Username is required to resend verification.",
+			"Please provide your username (email or phone number).",
+			"Missing username field", utils.RegisterURI)
+	}
+
+	// Check if pending registration exists
+	_, _, err := objects.Manager.Vault().GetPendingRegistration(username)
+	if err != nil {
+		return renderErrorPage(c, http.StatusNotFound, "No Pending Registration",
+			"No pending registration found for this username.",
+			"Please register first to receive a verification email.",
+			fmt.Sprintf("No pending registration for username '%s'", username), utils.RegisterURI)
+	}
+
+	// Generate new verification token
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return renderErrorPage(c, http.StatusInternalServerError, "Token Generation Error",
+			"Failed to generate verification token.",
+			"Our system encountered an error while processing your request. Please try again.",
+			fmt.Sprintf("Random token generation failed: %v", err), utils.RegisterURI)
+	}
+	tokenStr := hex.EncodeToString(tokenBytes)
+	expiresAt := time.Now().Add(24 * time.Hour).Unix()
+
+	// Store new verification token (this will overwrite any existing token for this username)
+	objects.Manager.Vault().SetVerificationToken(username, tokenStr, expiresAt)
+
+	// Send verification email/SMS
+	manager, ok := objects.Manager.(*libs.Manager)
+	emailSender := utils.SendVerificationEmail
+	smsSender := utils.SendVerificationSMS
+	if ok {
+		if manager.SendNotification.SendVerificationEmail != nil {
+			emailSender = manager.SendNotification.SendVerificationEmail
+		}
+		if manager.SendNotification.SendVerificationSMS != nil {
+			smsSender = manager.SendNotification.SendVerificationSMS
+		}
+	}
+
+	if utils.IsPhone(username) {
+		smsSender(c, username, tokenStr)
+		return responses.Render(c, utils.VerificationSentTemplate, fiber.Map{
+			"Title":   "Verification Sent",
+			"Message": "Verification SMS sent again. Please check your phone.",
+			"Contact": username,
+		})
+	}
+
+	emailSender(c, username, tokenStr)
+	utils.LogAuditEvent(c, objects.Manager, nil, utils.AuditActionResendVerification, nil, true, nil)
+	return responses.Render(c, utils.VerificationSentTemplate, fiber.Map{
+		"Title":   "Verification Sent",
+		"Message": "Verification email sent again. Please check your email.",
+		"Contact": username,
+	})
 }
 
 func PostLogout(c *fiber.Ctx) error {

@@ -95,7 +95,7 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 			middle_name VARCHAR(255),
 			last_name VARCHAR(255),
 			status VARCHAR(20),
-			login_type ENUM('simple', 'secured') DEFAULT 'simple',
+			login_type VARCHAR(10) DEFAULT 'simple',
 			mfa_enabled TINYINT(1) DEFAULT 0,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -175,12 +175,6 @@ func (d *DatabaseStorage) getMySQLSchema() []string {
 // getPostgreSQLSchema returns PostgreSQL-specific schema
 func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 	return []string{
-		`DO $$ BEGIN
-			CREATE TYPE login_type_enum AS ENUM ('simple', 'secured');
-		EXCEPTION
-			WHEN duplicate_object THEN null;
-		END $$`,
-
 		`CREATE TABLE IF NOT EXISTS users (
 			pub_hex VARCHAR(255) PRIMARY KEY,
 			username VARCHAR(255) UNIQUE NOT NULL,
@@ -190,16 +184,18 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 			middle_name VARCHAR(255),
 			last_name VARCHAR(255),
 			status VARCHAR(20),
-			login_type login_type_enum DEFAULT 'simple',
+			login_type VARCHAR(10) DEFAULT 'simple',
 			mfa_enabled BOOLEAN DEFAULT FALSE,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP DEFAULT NULL,
 			is_active BOOLEAN DEFAULT TRUE,
 			failed_attempts INTEGER DEFAULT 0,
 			locked_until TIMESTAMP NULL
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS credentials (
+			credential_id bigserial PRIMARY KEY,
 			user_id BIGINT NOT NULL,
 			credential TEXT NOT NULL,
 			metadata TEXT,
@@ -208,8 +204,7 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 			provider_type VARCHAR(100),
 			is_json BOOLEAN DEFAULT FALSE,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (user_id, credential_type)
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS verification_tokens (
@@ -249,20 +244,6 @@ func (d *DatabaseStorage) getPostgreSQLSchema() []string {
 			error_message TEXT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
-
-		// Indexes
-		`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_login_type ON users(login_type)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active)`,
-		`CREATE INDEX IF NOT EXISTS idx_credentials_user_id ON credentials(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_credentials_credential_type ON credentials(credential_type)`,
-		`CREATE INDEX IF NOT EXISTS idx_verification_tokens_username ON verification_tokens(username)`,
-		`CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token)`,
-		`CREATE INDEX IF NOT EXISTS idx_pending_registrations_username ON pending_registrations(username)`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)`,
 	}
 }
 

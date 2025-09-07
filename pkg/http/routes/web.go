@@ -22,6 +22,7 @@ func Setup(prefix string, router fiber.Router) {
 	DisabledRoutes(route, "Post", utils.LoginURI, middlewares.RateLimitWithMax(3), handlers.PostLogin)
 	DisabledRoutes(route, "Get", utils.RegisterURI, handlers.RegisterPage)
 	DisabledRoutes(route, "Post", utils.RegisterURI, middlewares.RateLimitWithMax(3), handlers.PostRegister)
+	DisabledRoutes(route, "Post", utils.ResendVerificationURI, middlewares.RateLimitWithMax(3), handlers.PostResendVerification)
 	DisabledRoutes(route, "Post", utils.SimpleLoginURI, middlewares.RateLimitWithMax(3), handlers.PostSimpleLogin)
 	DisabledRoutes(route, "Post", utils.SecuredLoginURI, middlewares.RateLimitWithMax(3), handlers.PostSecureLogin)
 	DisabledRoutes(route, "Get", utils.ForgotPasswordURI, handlers.ForgotPasswordPage)

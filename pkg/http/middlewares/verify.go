@@ -29,7 +29,7 @@ func SendError(c *fiber.Ctx, status int, message string) error {
 			"status":  status,
 		})
 	}
-	return c.Status(status).Redirect("/login?msg=" + url.QueryEscape(message))
+	return c.Status(status).Redirect("/login?error=" + url.QueryEscape(message))
 }
 
 // Helper to check if URI is an asset

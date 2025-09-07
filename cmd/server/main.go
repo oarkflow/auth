@@ -36,7 +36,7 @@ func main() {
 		Port:     5432,
 		Username: "postgres",
 		Password: "postgres",
-		Database: "communities",
+		Database: "communities_manager",
 	}
 	db, _, err := connection.FromConfig(dbConfig)
 	if err != nil {
@@ -48,7 +48,6 @@ func main() {
 		v2.WithNotificationHandler(libs.NotificationHandler{}),
 		v2.WithApp(app),
 		v2.WithDB(db),
-		v2.WithDBReset(true),
 	)
 	authPlugin.Register()
 	if err := app.Listen(":3000"); err != nil {
