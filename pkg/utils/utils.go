@@ -164,11 +164,16 @@ func GetCookie(enableHTTPS bool, env, key, val string, maxAges ...int) *fiber.Co
 
 	// Phase 1: Dynamic security settings based on environment
 	secure := enableHTTPS || env == "production"
+	domain := ""
+	if env != "production" {
+		domain = "localhost"
+	}
 
 	return &fiber.Cookie{
 		Name:     key,
 		Value:    val,
 		Path:     "/",
+		Domain:   domain,
 		HTTPOnly: true,
 		Secure:   secure,
 		MaxAge:   maxAge,
