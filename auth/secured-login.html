@@ -44,6 +44,7 @@
 
         <!-- Form -->
         <form method="POST" action="/login/secured" enctype="multipart/form-data" class="space-y-6">
+            {{if .Redirect}}<input type="hidden" name="redirect" value="{{.Redirect}}">{{end}}
             {{if .Username}}
             <!-- Hidden Username Field -->
             <input type="hidden" name="username" value="{{.Username}}">

@@ -16,6 +16,7 @@
                 {{if .Username}}<p class="text-sm text-gray-500 dark:text-gray-400 mt-2">User: {{.Username}}</p>{{end}}
             </div>
             <form id="mfa-form" class="space-y-6" method="POST" action="{{uris.MFAVerify}}">
+                {{if .Redirect}}<input type="hidden" name="redirect" value="{{.Redirect}}">{{end}}
                 <input type="hidden" name="username" value="{{.Username}}">
                 <div>
                     <label for="code" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

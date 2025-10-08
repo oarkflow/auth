@@ -20,6 +20,7 @@
             <!-- Login Form -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
                 <form action="/login/simple" method="POST" class="space-y-6">
+                    {{if .Redirect}}<input type="hidden" name="redirect" value="{{.Redirect}}">{{end}}
                     {{if .Username}}
                     <!-- User Display Only, No Username Field -->
                     <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
