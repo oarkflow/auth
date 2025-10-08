@@ -3,6 +3,7 @@ package requests
 type MFARequest struct {
 	Username string `json:"username" form:"username"`
 	Code     string `json:"code" form:"code"`
+	Redirect string `json:"redirect" form:"redirect"`
 }
 
 type MFASetupRequest struct {

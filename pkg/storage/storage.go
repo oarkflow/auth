@@ -3,7 +3,6 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -861,7 +860,6 @@ func (d *DatabaseStorage) GetAuditLogs(userID *string, limit int, offset int) ([
 
 // --- Login Attempts Methods ---
 func (d *DatabaseStorage) RecordLoginAttempt(identifier string, ipAddress string, userAgent *string, success bool) error {
-	log.Printf("DEBUG: RecordLoginAttempt called with identifier: %s, ip: %s, success: %v", identifier, ipAddress, success)
 	query := `INSERT INTO login_attempts (identifier, ip_address, user_agent, success) VALUES (:identifier, :ip_address, :user_agent, :success)`
 	params := map[string]any{
 		"identifier": identifier,
@@ -870,11 +868,6 @@ func (d *DatabaseStorage) RecordLoginAttempt(identifier string, ipAddress string
 		"success":    d.convertBoolForDB(success),
 	}
 	_, err := d.db.NamedExec(query, params)
-	if err != nil {
-		log.Printf("DEBUG: RecordLoginAttempt failed: %v", err)
-	} else {
-		log.Printf("DEBUG: RecordLoginAttempt succeeded for identifier: %s", identifier)
-	}
 	return err
 }
 

@@ -53,8 +53,10 @@ func MFASetupPage(c *fiber.Ctx) error {
 }
 
 func MFAVerifyPage(c *fiber.Ctx) error {
+	redirect, _ := getSessionData(c, "redirect_url")
 	return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
-		"Title": "MFA Verify",
+		"Title":    "MFA Verify",
+		"Redirect": redirect,
 	})
 }
 
@@ -229,14 +231,18 @@ func PostMFAVerify(c *fiber.Ctx) error {
 
 	// Based on user's login type, show appropriate login form
 	if userInfo.LoginType == "simple" {
+		redirect, _ := getSessionData(c, "redirect_url")
 		return responses.Render(c, utils.SimpleLoginTemplate, fiber.Map{
 			"Username": username,
 			"UserInfo": userInfo,
+			"Redirect": redirect,
 		})
 	}
+	redirect, _ := getSessionData(c, "redirect_url")
 	return responses.Render(c, utils.SecuredLoginTemplate, fiber.Map{
 		"Username": username,
 		"UserInfo": userInfo,
+		"Redirect": redirect,
 	})
 }
 

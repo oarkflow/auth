@@ -41,7 +41,6 @@ type SecurityManager struct {
 }
 
 func NewSecurityManager(storage contracts.Storage) *SecurityManager {
-	log.Printf("DEBUG: NewSecurityManager called with storage: %v", storage != nil)
 	return &SecurityManager{
 		RateLimiter: &models.RateLimiter{
 			Requests: make(map[string][]time.Time),
@@ -116,8 +115,6 @@ func (s *SecurityManager) RecordFailedLogin(identifier string, userAgent *string
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	log.Printf("DEBUG: RecordFailedLogin called with identifier: %s, userAgent: %v", identifier, userAgent)
-
 	// Record failed login attempt in database
 	// The identifier may contain IP:username format, extract IP
 	ipAddress := identifier
@@ -128,8 +125,6 @@ func (s *SecurityManager) RecordFailedLogin(identifier string, userAgent *string
 	err := s.storage.RecordLoginAttempt(identifier, ipAddress, userAgent, false)
 	if err != nil {
 		log.Printf("Error recording failed login attempt: %v", err)
-	} else {
-		log.Printf("DEBUG: Successfully recorded failed login attempt for identifier: %s", identifier)
 	}
 }
 

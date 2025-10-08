@@ -30,6 +30,16 @@ const (
 	loginCooldownPeriod = 15 * time.Minute
 )
 
+// isValidRedirect validates the redirect URL to prevent open redirect attacks.
+// Allows relative URLs (starting with /) or absolute HTTP/HTTPS URLs.
+func isValidRedirect(redirect string) bool {
+	u, err := url.Parse(redirect)
+	if err != nil {
+		return false
+	}
+	return u.Scheme == "" || u.Scheme == "http" || u.Scheme == "https"
+}
+
 func DashboardPage(c *fiber.Ctx) error {
 	pubHex, _ := c.Locals("user").(string)
 	info, _ := c.Locals("userInfo").(models.UserInfo)
@@ -181,12 +191,22 @@ func VerifyPage(c *fiber.Ctx) error {
 }
 
 func LoginPage(c *fiber.Ctx) error {
+	redirect := c.Query("redirect")
+	if redirect != "" && isValidRedirect(redirect) {
+		// Store redirect in session for use in subsequent requests
+		setSessionData(c, "redirect_url", redirect)
+	}
 	return responses.Render(c, utils.LoginTemplate, fiber.Map{
 		"Title": "Login",
 	})
 }
 
 func RegisterPage(c *fiber.Ctx) error {
+	redirect := c.Query("redirect")
+	if redirect != "" && isValidRedirect(redirect) {
+		// Store redirect in session for use in subsequent requests
+		setSessionData(c, "redirect_url", redirect)
+	}
 	return responses.Render(c, utils.RegisterTemplate, fiber.Map{
 		"Title": "Register",
 	})
@@ -274,14 +294,18 @@ func PostLogin(c *fiber.Ctx) error {
 		})
 	}
 	if userInfo.LoginType == "simple" {
+		redirect, _ := getSessionData(c, "redirect_url")
 		return responses.Render(c, utils.SimpleLoginTemplate, fiber.Map{
 			"Username": userInfo.Username,
 			"UserInfo": userInfo,
+			"Redirect": redirect,
 		})
 	}
+	redirect, _ := getSessionData(c, "redirect_url")
 	return responses.Render(c, utils.SecuredLoginTemplate, fiber.Map{
 		"Username": userInfo.Username,
 		"UserInfo": userInfo,
+		"Redirect": redirect,
 	})
 }
 
@@ -521,6 +545,17 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 	if ok && manager.LoginSuccessURL != "" {
 		uri = manager.LoginSuccessURL
 	}
+	// Check for redirect query parameter and validate it
+	redirect := req.Redirect
+	if redirect == "" {
+		redirect = c.Query("redirect")
+	}
+	if redirect == "" {
+		redirect, _ = getSessionData(c, "redirect_url")
+	}
+	if redirect != "" && isValidRedirect(redirect) {
+		return c.Redirect(redirect, fiber.StatusSeeOther)
+	}
 	data := flash.Get(c)
 	lastVisited, ok := data["last_visited_uri"].(string)
 	if lastVisited != "" {
@@ -749,6 +784,17 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	uri := utils.AppURI
 	if ok && manager.LoginSuccessURL != "" {
 		uri = manager.LoginSuccessURL
+	}
+	// Check for redirect query parameter and validate it
+	redirect := req.Redirect
+	if redirect == "" {
+		redirect = c.Query("redirect")
+	}
+	if redirect == "" {
+		redirect, _ = getSessionData(c, "redirect_url")
+	}
+	if redirect != "" && isValidRedirect(redirect) {
+		return c.Redirect(redirect, fiber.StatusSeeOther)
 	}
 	// Check for last_visited_uri cookie
 	data := flash.Get(c)
