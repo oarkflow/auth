@@ -41,7 +41,7 @@ func isValidRedirect(redirect string) bool {
 }
 
 // appendSuccessFields appends success-related query parameters to a redirect URL
-func appendSuccessFields(redirectURL, userID, username, sessionToken string, isLogin bool) string {
+func appendSuccessFields(redirectURL, userID, username, sessionToken string) string {
 	if redirectURL == "" {
 		return redirectURL
 	}
@@ -49,8 +49,36 @@ func appendSuccessFields(redirectURL, userID, username, sessionToken string, isL
 	if err != nil {
 		return redirectURL
 	}
+
+	// If the fragment contains the React route (e.g. "/dashboard?...")
+	if strings.HasPrefix(u.Fragment, "/") {
+		fragParts := strings.SplitN(u.Fragment, "?", 2)
+		route := fragParts[0]
+		q := url.Values{}
+
+		// Existing query in fragment?
+		if len(fragParts) == 2 {
+			existing, _ := url.ParseQuery(fragParts[1])
+			for k, v := range existing {
+				q[k] = v
+			}
+		}
+
+		// Append fields
+		q.Set("user_id", userID)
+		q.Set("username", username)
+		if sessionToken != "" {
+			q.Set("session_token", sessionToken)
+		}
+		q.Set("success", "true")
+
+		// Rebuild fragment
+		u.Fragment = fmt.Sprintf("%s?%s", route, q.Encode())
+		return u.String()
+	}
+
+	// Normal (non-hash) URLs
 	query := u.Query()
-	// Add common fields
 	query.Set("user_id", userID)
 	query.Set("username", username)
 	if sessionToken != "" {
@@ -58,6 +86,7 @@ func appendSuccessFields(redirectURL, userID, username, sessionToken string, isL
 	}
 	query.Set("success", "true")
 	u.RawQuery = query.Encode()
+
 	return u.String()
 }
 
@@ -572,7 +601,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		redirect, _ = getSessionData(c, "redirect_url")
 	}
 	if redirect != "" && isValidRedirect(redirect) {
-		redirectWithFields := appendSuccessFields(redirect, userIDStr, userInfo.Username, tokenStr, true)
+		redirectWithFields := appendSuccessFields(redirect, userIDStr, userInfo.Username, tokenStr)
 		return c.Redirect(redirectWithFields, fiber.StatusSeeOther)
 	}
 	data := flash.Get(c)
@@ -813,7 +842,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		redirect, _ = getSessionData(c, "redirect_url")
 	}
 	if redirect != "" && isValidRedirect(redirect) {
-		redirectWithFields := appendSuccessFields(redirect, userIDStr, info.Username, tokenStr, true)
+		redirectWithFields := appendSuccessFields(redirect, userIDStr, info.Username, tokenStr)
 		return c.Redirect(redirectWithFields, fiber.StatusSeeOther)
 	}
 	// Check for last_visited_uri cookie
