@@ -39,60 +39,67 @@ func isAssetURI(uri string) bool {
 	return ext != ""
 }
 
-func Verify(c *fiber.Ctx) error {
-	tokenStr := ""
-	sessionName := objects.Config.GetString("auth.session_name")
-	if sessionName == "" {
-		sessionName = utils.DefaultSessionName
-	}
-	cookie := c.Cookies(sessionName)
-	if cookie != "" {
-		tokenStr = cookie
-	} else {
-		auth := c.Get("Authorization")
-		if len(auth) > 7 && auth[:7] == "Bearer " {
-			tokenStr = auth[7:]
-		} else {
-			tokenStr = auth
+func Verify(paths ...string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		for _, p := range paths {
+			if utils.MatchResource(p, c.Path()) {
+				return c.Next()
+			}
 		}
-	}
-	if tokenStr == "" {
-		return SendError(c, fiber.StatusUnauthorized, "authentication required")
-	}
-	secret := objects.Config.GetString("auth.secret")
-	decTok, err := token.DecryptToken(tokenStr, []byte(secret))
-	if err != nil {
-		return SendError(c, fiber.StatusUnauthorized, "invalid session")
-	}
-	claims := decTok.Claims
-	claimIP, _ := claims["ip"].(string)
-	currentIP := utils.GetClientIP(c)
-	if isNotLocalhost(claimIP) && claimIP != currentIP {
-		return SendError(c, fiber.StatusUnauthorized, "IP mismatch")
-	}
-	pubHex, _ := claims["sub"].(string)
-	userInfo, exists := objects.Manager.LookupUserByPubHex(pubHex)
-	if !exists {
-		return SendError(c, fiber.StatusUnauthorized, "user not found")
-	}
+		tokenStr := ""
+		sessionName := objects.Config.GetString("auth.session_name")
+		if sessionName == "" {
+			sessionName = utils.DefaultSessionName
+		}
+		cookie := c.Cookies(sessionName)
+		if cookie != "" {
+			tokenStr = cookie
+		} else {
+			auth := c.Get("Authorization")
+			if len(auth) > 7 && auth[:7] == "Bearer " {
+				tokenStr = auth[7:]
+			} else {
+				tokenStr = auth
+			}
+		}
+		if tokenStr == "" {
+			return SendError(c, fiber.StatusUnauthorized, "authentication required")
+		}
+		secret := objects.Config.GetString("auth.secret")
+		decTok, err := token.DecryptToken(tokenStr, []byte(secret))
+		if err != nil {
+			return SendError(c, fiber.StatusUnauthorized, "invalid session")
+		}
+		claims := decTok.Claims
+		claimIP, _ := claims["ip"].(string)
+		currentIP := utils.GetClientIP(c)
+		if isNotLocalhost(claimIP) && claimIP != currentIP {
+			return SendError(c, fiber.StatusUnauthorized, "IP mismatch")
+		}
+		pubHex, _ := claims["sub"].(string)
+		userInfo, exists := objects.Manager.LookupUserByPubHex(pubHex)
+		if !exists {
+			return SendError(c, fiber.StatusUnauthorized, "user not found")
+		}
 
-	// Check if user has been logged out after token was issued
-	iat, _ := claims["iat"].(float64)
-	if iat > 0 && objects.Manager.LogoutTracker().IsUserLoggedOut(userInfo.UserID, int64(iat)) {
-		return SendError(c, fiber.StatusUnauthorized, "session loggout")
+		// Check if user has been logged out after token was issued
+		iat, _ := claims["iat"].(float64)
+		if iat > 0 && objects.Manager.LogoutTracker().IsUserLoggedOut(userInfo.UserID, int64(iat)) {
+			return SendError(c, fiber.StatusUnauthorized, "session loggout")
+		}
+
+		userIDStr := fmt.Sprintf("%d", userInfo.UserID)
+		utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionAccessProtected, utils.StringPtr(c.Path()), true, nil)
+
+		c.Locals("userInfo", userInfo)
+		c.Locals("user_id", userInfo.UserID)
+		c.Locals("user", claims["sub"])
+		c.Locals("claims", claims)
+		c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Set("Pragma", "no-cache")
+		c.Set("Expires", "0")
+		return c.Next()
 	}
-
-	userIDStr := fmt.Sprintf("%d", userInfo.UserID)
-	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionAccessProtected, utils.StringPtr(c.Path()), true, nil)
-
-	c.Locals("userInfo", userInfo)
-	c.Locals("user_id", userInfo.UserID)
-	c.Locals("user", claims["sub"])
-	c.Locals("claims", claims)
-	c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	c.Set("Pragma", "no-cache")
-	c.Set("Expires", "0")
-	return c.Next()
 }
 
 func isNotLocalhost(ip string) bool {

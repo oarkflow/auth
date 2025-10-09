@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
@@ -61,7 +62,12 @@ func (p *Plugin) Register() {
 	objects.Manager = manager
 	if p.App != nil {
 		routes.Setup(p.Prefix, p.App)
-		routes.ProtectedRoutes(p.App.Group(p.Prefix, middlewares.Verify))
+		var skipList []string
+		if objects.Config != nil {
+			authSkipList := objects.Config.GetString("auth.skiplist")
+			skipList = strings.Split(authSkipList, ",")
+		}
+		routes.ProtectedRoutes(p.App.Group(p.Prefix, middlewares.Verify(skipList...)))
 	}
 }
 
@@ -153,7 +159,7 @@ func NewPlugin(prefix, loginSuccessURL string, notificationHandler libs.Notifica
 			return template.HTML(s)
 		},
 		"uris": func() map[string]string {
-			return utils.GetURIs()
+			return utils.GetURIs(prefix)
 		},
 	})
 	objects.ViewEngine = engine
@@ -188,7 +194,7 @@ func NewPluginWithOptions(options ...Option) *Plugin {
 			return template.HTML(s)
 		},
 		"uris": func() map[string]string {
-			return utils.GetURIs()
+			return utils.GetURIs(plugin.Prefix)
 		},
 	})
 	objects.ViewEngine = engine

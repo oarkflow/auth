@@ -1,5 +1,7 @@
 package utils
 
+import "strings"
+
 var (
 	LandingURI            = "/"
 	HealthURI             = "/health"
@@ -49,27 +51,27 @@ var (
 	PasswordResetSuccessTemplate = "auth/password-reset-success"
 )
 
-func GetURIs() map[string]string {
+func GetURIs(prefix string) map[string]string {
 	return map[string]string{
-		"Landing":            LandingURI,
-		"App":                AppURI,
-		"Login":              LoginURI,
-		"Register":           RegisterURI,
-		"ResendVerification": ResendVerificationURI,
-		"Verify":             VerifyURI,
-		"ForgotPassword":     ForgotPasswordURI,
-		"OneTime":            OneTimeURI,
-		"SimpleLogin":        SimpleLoginURI,
-		"SecuredLogin":       SecuredLoginURI,
-		"MFAVerify":          MFAVerifyURI,
-		"Logout":             LogoutURI,
-		"UserInfo":           UserInfoURI,
-		"MFASetup":           MFASetupURI,
-		"MFADisable":         MFADisableURI,
-		"MFABackupCodes":     MFABackupCodesURI,
-		"Health":             HealthURI,
-		"ResetPassword":      ResetPasswordURI,
-		"LoginSelection":     LoginSelectionURI,
+		"Landing":            strings.ReplaceAll(prefix+LandingURI, "//", "/"),
+		"App":                strings.ReplaceAll(prefix+AppURI, "//", "/"),
+		"Login":              strings.ReplaceAll(prefix+LoginURI, "//", "/"),
+		"Register":           strings.ReplaceAll(prefix+RegisterURI, "//", "/"),
+		"ResendVerification": strings.ReplaceAll(prefix+ResendVerificationURI, "//", "/"),
+		"Verify":             strings.ReplaceAll(prefix+VerifyURI, "//", "/"),
+		"ForgotPassword":     strings.ReplaceAll(prefix+ForgotPasswordURI, "//", "/"),
+		"OneTime":            strings.ReplaceAll(prefix+OneTimeURI, "//", "/"),
+		"SimpleLogin":        strings.ReplaceAll(prefix+SimpleLoginURI, "//", "/"),
+		"SecuredLogin":       strings.ReplaceAll(prefix+SecuredLoginURI, "//", "/"),
+		"MFAVerify":          strings.ReplaceAll(prefix+MFAVerifyURI, "//", "/"),
+		"Logout":             strings.ReplaceAll(prefix+LogoutURI, "//", "/"),
+		"UserInfo":           strings.ReplaceAll(prefix+UserInfoURI, "//", "/"),
+		"MFASetup":           strings.ReplaceAll(prefix+MFASetupURI, "//", "/"),
+		"MFADisable":         strings.ReplaceAll(prefix+MFADisableURI, "//", "/"),
+		"MFABackupCodes":     strings.ReplaceAll(prefix+MFABackupCodesURI, "//", "/"),
+		"Health":             strings.ReplaceAll(prefix+HealthURI, "//", "/"),
+		"ResetPassword":      strings.ReplaceAll(prefix+ResetPasswordURI, "//", "/"),
+		"LoginSelection":     strings.ReplaceAll(prefix+LoginSelectionURI, "//", "/"),
 		"SupportEmail":       SupportEmail,
 	}
 }

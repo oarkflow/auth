@@ -11,10 +11,12 @@ func (a *Config) Prefix() string {
 }
 
 func (a *Config) Load() {
-	objects.Config.Add("app.name", "Auth")
-	objects.Config.Add("app.version", "1.0.0")
-	objects.Config.Add("app.env", "development")
-	objects.Config.Add("app.https", false)
+	/*
+		objects.Config.Add("app.name", "Auth")
+		objects.Config.Add("app.version", "1.0.0")
+		objects.Config.Add("app.env", "development")
+		objects.Config.Add("app.https", false)
+	*/
 	objects.Config.Add(a.Prefix(), map[string]any{
 		"password_algo":        objects.Config.Env("PW_HASH_ALGO", "argon2id"),
 		"legacy_password_algo": objects.Config.Env("LEGACY_PW_HASH_ALGO", "bcrypt"),
@@ -32,5 +34,6 @@ func (a *Config) Load() {
 
 		"enable_security_headers": objects.Config.Env("AUTH_ENABLE_SECURITY_HEADERS", true),
 		"enable_audit_logging":    objects.Config.Env("AUTH_ENABLE_AUDIT_LOGGING", true),
+		"skiplist":                objects.Config.Env("AUTH_SKIPLIST", ""),
 	})
 }
