@@ -51,7 +51,7 @@ func DashboardPage(c *fiber.Ctx) error {
 }
 
 func HealthCheck(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{
+	return responses.Success(c, fiber.StatusOK, fiber.Map{
 		"status": "ok",
 	})
 }
@@ -68,9 +68,7 @@ func UserInfoPage(c *fiber.Ctx) error {
 	// Get public key details
 	pubKeyX, pubKeyY, err := objects.Manager.GetPublicKeyByUserID(info.UserID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to retrieve user keys",
-		})
+		return responses.Failed(c, fiber.StatusInternalServerError, "Failed to retrieve user keys", nil, err.Error())
 	}
 
 	// Get MFA status
@@ -81,8 +79,7 @@ func UserInfoPage(c *fiber.Ctx) error {
 	}
 	iat, _ := claims["iat"].(float64)
 	exp_claim, _ := claims["exp"].(float64)
-
-	return c.JSON(map[string]any{
+	return responses.Success(c, fiber.StatusOK, fiber.Map{
 		"authenticated": true,
 		"user": map[string]any{
 			"id":          info.UserID,

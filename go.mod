@@ -34,6 +34,7 @@ require (
 )
 
 require (
+	github.com/andeya/goutil v1.1.2
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/boombuler/barcode v1.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
