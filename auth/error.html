@@ -50,7 +50,7 @@
                 {{end}}
 
                 <div class="flex space-x-3">
-                    <a href="/"
+                    <a href="{{uris.Landing}}"
                         class="flex-1 flex justify-center py-3 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition duration-200">
                         Go Home
                     </a>
@@ -67,10 +67,10 @@
                 <div class="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                     <p>If this error persists, please contact our support team with the error ID above.</p>
                     <div class="flex items-center space-x-4 mt-3 justify-between">
-                        <a href="/health"
+                        <a href="{{uris.Health}}"
                             class="text-primary-600 dark:text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 font-medium">System
                             Status</a>
-                        <a href="mailto:support@example.com"
+                        <a href="mailto:{{uris.SupportEmail}}"
                             class="text-primary-600 dark:text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 font-medium">Contact
                             Support</a>
                     </div>

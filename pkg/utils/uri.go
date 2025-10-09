@@ -19,6 +19,8 @@ var (
 	MFASetupURI           = "/mfa/setup"
 	MFADisableURI         = "/mfa/disable"
 	MFABackupCodesURI     = "/mfa/backup-codes"
+	LoginSelectionURI     = "/login-selection"
+	SupportEmail          = "support@example.com"
 )
 
 var (
@@ -65,6 +67,10 @@ func GetURIs() map[string]string {
 		"MFASetup":           MFASetupURI,
 		"MFADisable":         MFADisableURI,
 		"MFABackupCodes":     MFABackupCodesURI,
+		"Health":             HealthURI,
+		"ResetPassword":      ResetPasswordURI,
+		"LoginSelection":     LoginSelectionURI,
+		"SupportEmail":       SupportEmail,
 	}
 }
 

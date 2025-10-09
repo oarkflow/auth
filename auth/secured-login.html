@@ -43,7 +43,7 @@
         </div>
 
         <!-- Form -->
-        <form method="POST" action="/login/secured" enctype="multipart/form-data" class="space-y-6">
+        <form method="POST" action="{{uris.SecuredLogin}}" enctype="multipart/form-data" class="space-y-6">
             {{if .Redirect}}<input type="hidden" name="redirect" value="{{.Redirect}}">{{end}}
             {{if .Username}}
             <!-- Hidden Username Field -->
@@ -156,7 +156,7 @@
 
         <!-- Alternative Options -->
         <div class="mt-6 flex flex-col space-y-2">
-            <a href="/login-selection"
+            <a href="{{uris.LoginSelection}}"
                 class="text-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium">
                 ← Other Login Methods
             </a>
