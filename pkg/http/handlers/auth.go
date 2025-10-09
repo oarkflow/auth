@@ -40,6 +40,27 @@ func isValidRedirect(redirect string) bool {
 	return u.Scheme == "" || u.Scheme == "http" || u.Scheme == "https"
 }
 
+// appendSuccessFields appends success-related query parameters to a redirect URL
+func appendSuccessFields(redirectURL, userID, username, sessionToken string, isLogin bool) string {
+	if redirectURL == "" {
+		return redirectURL
+	}
+	u, err := url.Parse(redirectURL)
+	if err != nil {
+		return redirectURL
+	}
+	query := u.Query()
+	// Add common fields
+	query.Set("user_id", userID)
+	query.Set("username", username)
+	if sessionToken != "" {
+		query.Set("session_token", sessionToken)
+	}
+	query.Set("success", "true")
+	u.RawQuery = query.Encode()
+	return u.String()
+}
+
 func DashboardPage(c *fiber.Ctx) error {
 	pubHex, _ := c.Locals("user").(string)
 	info, _ := c.Locals("userInfo").(models.UserInfo)
@@ -551,7 +572,8 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		redirect, _ = getSessionData(c, "redirect_url")
 	}
 	if redirect != "" && isValidRedirect(redirect) {
-		return c.Redirect(redirect, fiber.StatusSeeOther)
+		redirectWithFields := appendSuccessFields(redirect, userIDStr, userInfo.Username, tokenStr, true)
+		return c.Redirect(redirectWithFields, fiber.StatusSeeOther)
 	}
 	data := flash.Get(c)
 	lastVisited, ok := data["last_visited_uri"].(string)
@@ -791,7 +813,8 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		redirect, _ = getSessionData(c, "redirect_url")
 	}
 	if redirect != "" && isValidRedirect(redirect) {
-		return c.Redirect(redirect, fiber.StatusSeeOther)
+		redirectWithFields := appendSuccessFields(redirect, userIDStr, info.Username, tokenStr, true)
+		return c.Redirect(redirectWithFields, fiber.StatusSeeOther)
 	}
 	// Check for last_visited_uri cookie
 	data := flash.Get(c)
