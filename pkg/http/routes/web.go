@@ -41,6 +41,7 @@ func ProtectedRoutes(route fiber.Router) {
 	DisabledRoutes(route, "Post", utils.MFADisableURI, handlers.PostMFADisable)
 	DisabledRoutes(route, "Get", utils.MFABackupCodesURI, handlers.MFABackupCodesPage)
 	DisabledRoutes(route, "Get", "/demo", handlers.DemoPage)
+	DisabledRoutes(route, "Get", "/api/secure/bootstrap", handlers.SecureSessionBootstrap)
 	// Secure API routes
 	DisabledRoutes(route, "Post", "/api/secure/ping", middlewares.SecureMiddleware(func(session *middlewares.UserSession, req middlewares.GenericRequest) middlewares.GenericResponse {
 		return middlewares.GenericResponse{Data: map[string]any{

@@ -28,7 +28,8 @@ import (
 )
 
 const (
-	loginCooldownPeriod = 15 * time.Minute
+	loginCooldownPeriod    = 15 * time.Minute
+	secureClientSessionTTL = 10 * time.Minute
 )
 
 // isValidRedirect validates the redirect URL to prevent open redirect attacks.
@@ -114,9 +115,71 @@ func LandingPage(c *fiber.Ctx) error {
 }
 
 func DemoPage(c *fiber.Ctx) error {
+	secureCtx, err := buildSecureClientContext(c)
+	if err != nil {
+		// The demo page should still render even if the secure context is unavailable.
+		// We'll log the error and provide an empty context so the client JS can handle bootstrap failures gracefully.
+		log.Printf("secure client context unavailable: %v", err)
+	}
 	return responses.Render(c, "auth/demo", fiber.Map{
-		"Title": "Secure WASM API Demo",
+		"Title":               "Secure WASM API Demo",
+		"SecureClientContext": secureCtx,
 	})
+}
+
+func SecureSessionBootstrap(c *fiber.Ctx) error {
+	secureCtx, err := buildSecureClientContext(c)
+	if err != nil {
+		return responses.Failed(c, fiber.StatusUnauthorized, "Failed to bootstrap secure session", fiber.Map{"error": err.Error()})
+	}
+	return responses.Success(c, fiber.StatusOK, fiber.Map{
+		"session": secureCtx,
+	})
+}
+
+func buildSecureClientContext(c *fiber.Ctx) (fiber.Map, error) {
+	sessionKey, ok := libs.GetSessionData(c, "session_key")
+	if !ok || sessionKey == "" {
+		return nil, fmt.Errorf("missing session key")
+	}
+	hmacKey, ok := libs.GetSessionData(c, "hmac_key")
+	if !ok || hmacKey == "" {
+		return nil, fmt.Errorf("missing hmac key")
+	}
+	userID, ok := libs.GetSessionData(c, "user_id")
+	if !ok || userID == "" {
+		return nil, fmt.Errorf("missing user id")
+	}
+	createdAtRaw, ok := libs.GetSessionData(c, "session_created_at")
+	if !ok || createdAtRaw == "" {
+		return nil, fmt.Errorf("missing session timestamp")
+	}
+	createdAt, err := time.Parse(time.RFC3339, createdAtRaw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid session timestamp: %w", err)
+	}
+	if time.Since(createdAt) > secureClientSessionTTL {
+		return nil, fmt.Errorf("session expired")
+	}
+
+	sessionName := objects.Config.GetString("auth.session_name")
+	if sessionName == "" {
+		sessionName = utils.DefaultSessionName
+	}
+	sessionID := c.Cookies(sessionName)
+	if sessionID == "" {
+		return nil, fmt.Errorf("missing session token")
+	}
+
+	return fiber.Map{
+		"session_id":  sessionID,
+		"user_id":     userID,
+		"session_key": sessionKey,
+		"hmac_key":    hmacKey,
+		"created_at":  createdAt.Format(time.RFC3339),
+		"expires_at":  createdAt.Add(secureClientSessionTTL).Format(time.RFC3339),
+		"ttl_seconds": int(secureClientSessionTTL.Seconds()),
+	}, nil
 }
 
 func UserInfoPage(c *fiber.Ctx) error {

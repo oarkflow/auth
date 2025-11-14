@@ -116,6 +116,14 @@
 </head>
 
 <body>
+    <div id="secure-session-bootstrap" class="hidden"
+        data-session-id='{{with .SecureClientContext}}{{index . "session_id"}}{{end}}'
+        data-user-id='{{with .SecureClientContext}}{{index . "user_id"}}{{end}}'
+        data-session-key='{{with .SecureClientContext}}{{index . "session_key"}}{{end}}'
+        data-hmac-key='{{with .SecureClientContext}}{{index . "hmac_key"}}{{end}}'
+        data-created-at='{{with .SecureClientContext}}{{index . "created_at"}}{{end}}'
+        data-expires-at='{{with .SecureClientContext}}{{index . "expires_at"}}{{end}}'>
+    </div>
     <div class="container">
         <h1>{{.Title}}</h1>
         <p>Click the button below to call <code>/api/secure/ping</code> using <code>secureFetch</code>.</p>
@@ -139,6 +147,80 @@
     <script>
         const go = new Go();
 
+        function logToDiv(message, isError = false) {
+            const output = document.getElementById('output');
+            if (!output) {
+                return;
+            }
+            const timestamp = new Date().toLocaleTimeString();
+            const p = document.createElement('p');
+            p.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            if (isError) p.classList.add('error');
+            else p.classList.add('success');
+            output.appendChild(p);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        let secureBootstrapAttempted = false;
+
+        async function bootstrapSecureClient() {
+            if (secureBootstrapAttempted) {
+                return true;
+            }
+            secureBootstrapAttempted = true;
+            let success = false;
+            try {
+                let sessionData = null;
+                const bootstrapEl = document.getElementById('secure-session-bootstrap');
+                if (bootstrapEl) {
+                    const { sessionId, userId, sessionKey, hmacKey } = bootstrapEl.dataset;
+                    if (sessionId && sessionKey && hmacKey) {
+                        sessionData = {
+                            session_id: sessionId,
+                            user_id: userId,
+                            session_key: sessionKey,
+                            hmac_key: hmacKey,
+                        };
+                    }
+                }
+
+                if (!sessionData) {
+                    const response = await fetch('/api/secure/bootstrap', { credentials: 'include' });
+                    if (!response.ok) {
+                        throw new Error(`bootstrap request failed (${response.status})`);
+                    }
+                    const payload = await response.json();
+                    sessionData = payload?.data?.session || payload?.session || null;
+                }
+
+                if (!sessionData) {
+                    throw new Error('bootstrap payload missing session data');
+                }
+
+                if (typeof window.setSession !== 'function') {
+                    throw new Error('setSession is not available');
+                }
+
+                const { session_id, user_id, session_key, hmac_key } = sessionData;
+                if (!session_id || !session_key || !hmac_key) {
+                    throw new Error('incomplete session data received');
+                }
+
+                window.setSession(session_id, user_id || '', session_key, hmac_key);
+                logToDiv('Secure client session initialized.');
+                success = true;
+                return true;
+            } catch (error) {
+                logToDiv(`Bootstrap error: ${error.message}`, true);
+                secureBootstrapAttempted = false;
+                return false;
+            } finally {
+                if (!success) {
+                    secureBootstrapAttempted = false;
+                }
+            }
+        }
+
         async function loadWasmClient() {
             try {
                 let result;
@@ -155,6 +237,7 @@
                 const ensureInit = () => {
                     if (typeof window.initClient === "function") {
                         window.initClient(window.location.origin);
+                        bootstrapSecureClient();
                     } else {
                         setTimeout(ensureInit, 50);
                     }
@@ -168,19 +251,13 @@
 
         loadWasmClient();
 
-        function logToDiv(message, isError = false) {
-            const output = document.getElementById('output');
-            const timestamp = new Date().toLocaleTimeString();
-            const p = document.createElement('p');
-            p.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
-            if (isError) p.classList.add('error');
-            else p.classList.add('success');
-            output.appendChild(p);
-            output.scrollTop = output.scrollHeight;
-        }
-
         async function testSecurePing() {
             try {
+                const ready = await bootstrapSecureClient();
+                if (!ready) {
+                    logToDiv('Secure client session is not available. Please ensure you are logged in.', true);
+                    return;
+                }
                 logToDiv('Calling /api/secure/ping with secureFetch...');
                 const response = await secureFetch("/api/secure/ping", {
                     method: "POST",
