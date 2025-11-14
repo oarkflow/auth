@@ -118,39 +118,12 @@
 <body>
     <div class="container">
         <h1>{{.Title}}</h1>
-        <p>This demo shows how to use secure encrypted API communication with WASM clients.</p>
+        <p>Click the button below to call <code>/api/secure/ping</code> using <code>secureFetch</code>.</p>
     </div>
 
-    <div id="loginSection" class="container">
+    <div class="container">
         <div class="section">
-            <h3>Login</h3>
-            <div class="form-group">
-                <label for="username">Username:</label>
-                <input type="text" id="username" placeholder="Enter your username" value="test@example.com">
-            </div>
-            <div class="form-group">
-                <label for="password">Password:</label>
-                <input type="password" id="password" placeholder="Enter your password" value="password123">
-            </div>
-            <button onclick="login()">Login</button>
-            <div id="loginStatus" class="status hidden"></div>
-        </div>
-    </div>
-
-    <div id="apiSection" class="container hidden">
-        <div class="section">
-            <h3>Secure API Tests</h3>
-            <p>These buttons test the encrypted API endpoints using the secureFetch function.</p>
-            <button onclick="ping()">Ping API</button>
-            <button onclick="testUserInfo()">Get User Info</button>
-        </div>
-    </div>
-
-    <div id="logoutSection" class="container hidden">
-        <div class="section">
-            <h3>Session Management</h3>
-            <button onclick="logout()">Logout</button>
-            <button onclick="clearSession()">Clear Local Session</button>
+            <button onclick="testSecurePing()">Test secureFetch Ping</button>
         </div>
     </div>
 
@@ -164,13 +137,36 @@
 
     <script src="/static/wasm_exec.js"></script>
     <script>
-        // Prevent session data leakage via console
-        Object.defineProperty(window, 'sessionData', {
-            get: function () { return 'Access denied'; },
-            set: function () { throw new Error('Session data modification blocked'); }
-        });
+        const go = new Go();
 
-        let goInstance = null;
+        async function loadWasmClient() {
+            try {
+                let result;
+                if ("instantiateStreaming" in WebAssembly) {
+                    result = await WebAssembly.instantiateStreaming(fetch("/static/fetch.wasm"), go.importObject);
+                } else {
+                    const response = await fetch("/static/fetch.wasm");
+                    const bytes = await response.arrayBuffer();
+                    result = await WebAssembly.instantiate(bytes, go.importObject);
+                }
+
+                go.run(result.instance);
+
+                const ensureInit = () => {
+                    if (typeof window.initClient === "function") {
+                        window.initClient(window.location.origin);
+                    } else {
+                        setTimeout(ensureInit, 50);
+                    }
+                };
+
+                ensureInit();
+            } catch (error) {
+                logToDiv(`Failed to load WASM: ${error.message}`, true);
+            }
+        }
+
+        loadWasmClient();
 
         function logToDiv(message, isError = false) {
             const output = document.getElementById('output');
@@ -183,116 +179,13 @@
             output.scrollTop = output.scrollHeight;
         }
 
-        function setStatus(elementId, message, isError = false) {
-            const element = document.getElementById(elementId);
-            element.textContent = message;
-            element.className = 'status';
-            if (isError) {
-                element.classList.add('error');
-            } else {
-                element.classList.add('success');
-            }
-            element.classList.remove('hidden');
-        }
-
-        function hideStatus(elementId) {
-            document.getElementById(elementId).classList.add('hidden');
-        }
-
-        function handleSessionExpiry() {
-            if (typeof window.clearSession === 'function') {
-                window.clearSession();
-            }
-            ['sessionID', 'userID', 'sessionKey', 'hmacKey', 'sessionExpiry'].forEach(key =>
-                localStorage.removeItem(key)
-            );
-            document.getElementById('loginSection').classList.remove('hidden');
-            document.getElementById('logoutSection').classList.add('hidden');
-            document.getElementById('apiSection').classList.add('hidden');
-            setStatus('loginStatus', 'Session expired, please login again', true);
-            logToDiv('Session expired', true);
-        }
-
-        function restoreSession() {
-            const stored = ['sessionID', 'userID', 'sessionKey', 'hmacKey', 'sessionExpiry']
-                .reduce((acc, key) => ({ ...acc, [key]: localStorage.getItem(key) }), {});
-
-            if (Object.values(stored).every(v => v)) {
-                const now = Date.now();
-                if (now > parseInt(stored.sessionExpiry)) {
-                    Object.keys(stored).forEach(key => localStorage.removeItem(key));
-                    logToDiv('Stored session expired', true);
-                    return false;
-                } else {
-                    window.setSession(stored.sessionID, stored.userID, stored.sessionKey, stored.hmacKey);
-                    setStatus('loginStatus', `Session restored! User: ${stored.userID}`);
-                    document.getElementById('loginSection').classList.add('hidden');
-                    document.getElementById('logoutSection').classList.remove('hidden');
-                    document.getElementById('apiSection').classList.remove('hidden');
-                    logToDiv('Session restored from localStorage');
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // Initialize WASM
-        WebAssembly.instantiateStreaming(fetch("/static/fetch.wasm"), go.importObject).then((res) => {
-            goInstance = new Go();
-            goInstance.run(res.instance);
-            window.initClient(window.location.origin);
-
-            // Try to restore session on page load
-            restoreSession();
-        }).catch(error => {
-            logToDiv(`Failed to load WASM: ${error.message}`, true);
-        });
-
-        async function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-
-            if (!username || !password) {
-                setStatus('loginStatus', 'Please enter both username and password', true);
-                return;
-            }
-
+        async function testSecurePing() {
             try {
-                setStatus('loginStatus', 'Logging in...');
-                logToDiv('Attempting login...');
-
-                // Use simple login endpoint
-                const response = await fetch('/login/simple', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Login failed: ${response.status} ${response.statusText} - ${errorText}`);
-                }
-
-                // On successful login, redirect happens, but we need to extract session data
-                // The session keys are now set in cookies by the server
-                setStatus('loginStatus', 'Login successful! Session keys set in cookies.');
-                document.getElementById('loginSection').classList.add('hidden');
-                document.getElementById('logoutSection').classList.remove('hidden');
-                document.getElementById('apiSection').classList.remove('hidden');
-                logToDiv('Login successful - session keys stored in cookies');
-
-            } catch (error) {
-                setStatus('loginStatus', `Login error: ${error.message}`, true);
-                logToDiv(`Login error: ${error.message}`, true);
-            }
-        }
-
-        async function ping() {
-            try {
-                logToDiv('Testing secure ping...');
+                logToDiv('Calling /api/secure/ping with secureFetch...');
                 const response = await secureFetch("/api/secure/ping", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" }
+                    headers: { "Content-Type": "application/json" },
+                    credentials: 'include'
                 });
 
                 if (response.ok) {
@@ -303,66 +196,9 @@
                     logToDiv(`Ping failed: ${response.status} ${response.statusText} - ${errorText}`, true);
                 }
             } catch (error) {
+                console.log(error)
                 logToDiv(`Ping error: ${error.message}`, true);
-                if (error.message?.includes('Invalid session') || error.message?.includes('Missing session')) {
-                    handleSessionExpiry();
-                }
             }
-        }
-
-        async function testUserInfo() {
-            try {
-                logToDiv('Testing user info endpoint...');
-                const response = await secureFetch("/api/user/info", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ action: "get_info" })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    logToDiv(`User info success: ${JSON.stringify(data, null, 2)}`);
-                } else {
-                    const errorText = await response.text();
-                    logToDiv(`User info failed: ${response.status} ${response.statusText} - ${errorText}`, true);
-                }
-            } catch (error) {
-                logToDiv(`User info error: ${error.message}`, true);
-                if (error.message?.includes('Invalid session') || error.message?.includes('Missing session')) {
-                    handleSessionExpiry();
-                }
-            }
-        }
-
-        async function logout() {
-            try {
-                logToDiv('Logging out...');
-                await fetch('/logout', {
-                    method: 'POST'
-                });
-                logToDiv('Server logout completed');
-            } catch (error) {
-                logToDiv(`Server logout error: ${error.message}`, true);
-            }
-
-            // Clear client-side session
-            clearSession();
-        }
-
-        function clearSession() {
-            if (typeof window.clearSession === 'function') {
-                window.clearSession();
-            }
-
-            ['sessionID', 'userID', 'sessionKey', 'hmacKey', 'sessionExpiry'].forEach(key =>
-                localStorage.removeItem(key)
-            );
-
-            hideStatus('loginStatus');
-            document.getElementById('loginSection').classList.remove('hidden');
-            document.getElementById('logoutSection').classList.add('hidden');
-            document.getElementById('apiSection').classList.add('hidden');
-            logToDiv('Local session cleared');
         }
 
         function clearLog() {

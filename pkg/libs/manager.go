@@ -3,7 +3,6 @@ package libs
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"fmt"
 	"log"
 	"math/big"
 	"strings"
@@ -384,7 +383,6 @@ func (manager *Manager) LookupUserByUsername(username string) (models.UserInfo, 
 	} else {
 		manager.UserInfoCacheMu.RUnlock()
 	}
-	fmt.Println("check in db", username)
 	// Cache miss or expired, fetch from database
 	info, err := manager.vault.GetUserInfoByUsername(username)
 	if err != nil {

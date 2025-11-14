@@ -15,7 +15,6 @@ func Setup(prefix string, router fiber.Router) {
 	route := router.Group(prefix)
 	DisabledRoutes(route, "Get", utils.HealthURI, handlers.HealthCheck)
 	DisabledRoutes(route, "Get", utils.LandingURI, handlers.LandingPage)
-	DisabledRoutes(route, "Get", "/demo", handlers.DemoPage)
 	DisabledRoutes(route, "Get", utils.VerifyURI, handlers.VerifyPage)
 	DisabledRoutes(route, "Get", utils.ResetPasswordURI, handlers.PasswordResetPage)
 	DisabledRoutes(route, "Post", utils.ResetPasswordURI, middlewares.RateLimitWithMax(3), handlers.PostResetPassword)
@@ -41,6 +40,7 @@ func ProtectedRoutes(route fiber.Router) {
 	DisabledRoutes(route, "Post", utils.MFASetupURI, handlers.PostMFASetup)
 	DisabledRoutes(route, "Post", utils.MFADisableURI, handlers.PostMFADisable)
 	DisabledRoutes(route, "Get", utils.MFABackupCodesURI, handlers.MFABackupCodesPage)
+	DisabledRoutes(route, "Get", "/demo", handlers.DemoPage)
 	// Secure API routes
 	DisabledRoutes(route, "Post", "/api/secure/ping", middlewares.SecureMiddleware(func(session *middlewares.UserSession, req middlewares.GenericRequest) middlewares.GenericResponse {
 		return middlewares.GenericResponse{Data: map[string]any{

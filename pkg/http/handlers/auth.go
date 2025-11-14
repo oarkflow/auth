@@ -114,7 +114,7 @@ func LandingPage(c *fiber.Ctx) error {
 }
 
 func DemoPage(c *fiber.Ctx) error {
-	return responses.Render(c, "demo.html", fiber.Map{
+	return responses.Render(c, "auth/demo", fiber.Map{
 		"Title": "Secure WASM API Demo",
 	})
 }
@@ -206,7 +206,6 @@ func VerifyPage(c *fiber.Ctx) error {
 	}
 	err = objects.Manager.Vault().SetUserInfo(pubHex, info)
 	if err != nil {
-		fmt.Println(err)
 		return renderErrorPage(c, http.StatusInternalServerError, "Account Creation Error",
 			"Failed to create your user account.",
 			"There was an issue creating your account. Please try registering again.",
@@ -216,7 +215,6 @@ func VerifyPage(c *fiber.Ctx) error {
 	objects.Manager.RegisterUserKey(pubHex, []byte(pubx), []byte(puby))
 	err = objects.Manager.Vault().SetUserSecret(info.UserID, passwordHash)
 	if err != nil {
-		fmt.Println(err)
 		return renderErrorPage(c, http.StatusInternalServerError, "Account Creation Error",
 			"Failed to create your user account.",
 			"There was an issue creating your account. Please try registering again.",

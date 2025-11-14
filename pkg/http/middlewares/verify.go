@@ -62,9 +62,7 @@ func Verify(paths ...string) fiber.Handler {
 				tokenStr = auth
 			}
 		}
-		fmt.Println(sessionName, tokenStr)
 		if tokenStr == "" {
-			fmt.Println("No token found in request", c.Path())
 			return SendError(c, fiber.StatusUnauthorized, "authentication required")
 		}
 		secret := objects.Config.GetString("auth.secret")

@@ -19,6 +19,7 @@ import (
 	"github.com/oarkflow/hash"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/oarkflow/auth/pkg/objects"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -164,9 +165,10 @@ func GetCookie(enableHTTPS bool, env, key, val string, maxAges ...int) *fiber.Co
 
 	// Phase 1: Dynamic security settings based on environment
 	secure := enableHTTPS || env == "production"
-	domain := ""
-	if env != "production" {
-		domain = "localhost"
+	domain := strings.TrimSpace(objects.Config.GetString("auth.cookie_domain"))
+	if domain == "" {
+		// Leave empty so the browser scopes the cookie to the current host
+		domain = ""
 	}
 
 	return &fiber.Cookie{

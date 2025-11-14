@@ -23,6 +23,7 @@ func (a *Config) Load() {
 		"secret":               objects.Config.Env("AUTH_SECRET", "OdR4DlWhZk6osDd0qXLdVT88lHOvj14L"),
 		"session_name":         objects.Config.Env("AUTH_SESSION_NAME", "session_token"),
 		"session_timeout":      objects.Config.Env("AUTH_SESSION_TIMEOUT", "24h"),
+		"cookie_domain":        objects.Config.Env("AUTH_COOKIE_DOMAIN", ""),
 
 		"proof_timeout": objects.Config.Env("AUTH_PROOF_TIMEOUT", "24m"),
 
