@@ -36,7 +36,7 @@ func main() {
 		Port:     5432,
 		Username: "postgres",
 		Password: "postgres",
-		Database: "communities_manager",
+		Database: "m",
 	}
 	db, _, err := connection.FromConfig(dbConfig)
 	if err != nil {
@@ -50,6 +50,10 @@ func main() {
 		v2.WithDB(db),
 	)
 	authPlugin.Register()
+
+	// Serve static files from the static folder
+	app.Static("/static", "./static")
+
 	if err := app.Listen(":3000"); err != nil {
 		log.Fatal(err)
 	}

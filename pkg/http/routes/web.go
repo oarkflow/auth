@@ -15,6 +15,7 @@ func Setup(prefix string, router fiber.Router) {
 	route := router.Group(prefix)
 	DisabledRoutes(route, "Get", utils.HealthURI, handlers.HealthCheck)
 	DisabledRoutes(route, "Get", utils.LandingURI, handlers.LandingPage)
+	DisabledRoutes(route, "Get", "/demo", handlers.DemoPage)
 	DisabledRoutes(route, "Get", utils.VerifyURI, handlers.VerifyPage)
 	DisabledRoutes(route, "Get", utils.ResetPasswordURI, handlers.PasswordResetPage)
 	DisabledRoutes(route, "Post", utils.ResetPasswordURI, middlewares.RateLimitWithMax(3), handlers.PostResetPassword)
@@ -40,6 +41,28 @@ func ProtectedRoutes(route fiber.Router) {
 	DisabledRoutes(route, "Post", utils.MFASetupURI, handlers.PostMFASetup)
 	DisabledRoutes(route, "Post", utils.MFADisableURI, handlers.PostMFADisable)
 	DisabledRoutes(route, "Get", utils.MFABackupCodesURI, handlers.MFABackupCodesPage)
+	// Secure API routes
+	DisabledRoutes(route, "Post", "/api/secure/ping", middlewares.SecureMiddleware(func(session *middlewares.UserSession, req middlewares.GenericRequest) middlewares.GenericResponse {
+		return middlewares.GenericResponse{Data: map[string]any{
+			"message": "pong",
+			"user":    session.UserID,
+			"action":  req.Action,
+			"body":    req.Body,
+		}}
+	}))
+	DisabledRoutes(route, "Post", "/api/user/info", middlewares.SecureMiddleware(func(session *middlewares.UserSession, req middlewares.GenericRequest) middlewares.GenericResponse {
+		// Get user info from database
+		userInfo, exists := objects.Manager.LookupUserByUsername(session.UserID)
+		if !exists {
+			return middlewares.GenericResponse{Error: "User not found"}
+		}
+		return middlewares.GenericResponse{Data: map[string]any{
+			"user_id":    userInfo.UserID,
+			"username":   userInfo.Username,
+			"login_type": userInfo.LoginType,
+			"action":     req.Action,
+		}}
+	}))
 }
 
 func DisabledRoutes(route fiber.Router, method, uri string, handlers ...fiber.Handler) {

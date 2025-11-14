@@ -41,8 +41,8 @@ func MFASetupPage(c *fiber.Ctx) error {
 	}
 
 	// Store in session temporarily (not in database yet)
-	setSessionData(c, "mfa_temp_secret", secret)
-	setSessionData(c, "mfa_temp_backup_codes", strings.Join(backupCodes, ","))
+	libs.SetSessionData(c, "mfa_temp_secret", secret)
+	libs.SetSessionData(c, "mfa_temp_backup_codes", strings.Join(backupCodes, ","))
 	qrCode = strings.ReplaceAll(qrCode, "data:image/png;base64,", "")
 	data := models.MFASetupData{
 		Secret:      secret,
@@ -53,7 +53,7 @@ func MFASetupPage(c *fiber.Ctx) error {
 }
 
 func MFAVerifyPage(c *fiber.Ctx) error {
-	redirect, _ := getSessionData(c, "redirect_url")
+	redirect, _ := libs.GetSessionData(c, "redirect_url")
 	return responses.Render(c, utils.MFAVerifyTemplate, fiber.Map{
 		"Title":    "MFA Verify",
 		"Redirect": redirect,
@@ -110,7 +110,7 @@ func PostMFASetup(c *fiber.Ctx) error {
 			"", "", utils.MFASetupURI)
 	}
 	// Get temporary secret from session
-	tempSecret, exists := getSessionData(c, "mfa_temp_secret")
+	tempSecret, exists := libs.GetSessionData(c, "mfa_temp_secret")
 	if !exists || tempSecret == "" {
 		return renderErrorPage(c, http.StatusBadRequest, "Setup Session Expired",
 			"MFA setup session has expired.",
@@ -125,7 +125,7 @@ func PostMFASetup(c *fiber.Ctx) error {
 	}
 
 	// Get backup codes from session
-	tempBackupCodesStr, _ := getSessionData(c, "mfa_temp_backup_codes")
+	tempBackupCodesStr, _ := libs.GetSessionData(c, "mfa_temp_backup_codes")
 	backupCodes := strings.Split(tempBackupCodesStr, ",")
 
 	// Save MFA settings to database
@@ -145,8 +145,8 @@ func PostMFASetup(c *fiber.Ctx) error {
 	}
 
 	// Clear session data
-	clearSessionData(c, "mfa_temp_secret")
-	clearSessionData(c, "mfa_temp_backup_codes")
+	libs.ClearSessionData(c, "mfa_temp_secret")
+	libs.ClearSessionData(c, "mfa_temp_backup_codes")
 
 	userIDStr := fmt.Sprintf("%d", userInfo.UserID)
 	utils.LogAuditEvent(c, objects.Manager, &userIDStr, utils.AuditActionMFASetup, nil, true, nil)
@@ -231,14 +231,14 @@ func PostMFAVerify(c *fiber.Ctx) error {
 
 	// Based on user's login type, show appropriate login form
 	if userInfo.LoginType == "simple" {
-		redirect, _ := getSessionData(c, "redirect_url")
+		redirect, _ := libs.GetSessionData(c, "redirect_url")
 		return responses.Render(c, utils.SimpleLoginTemplate, fiber.Map{
 			"Username": username,
 			"UserInfo": userInfo,
 			"Redirect": redirect,
 		})
 	}
-	redirect, _ := getSessionData(c, "redirect_url")
+	redirect, _ := libs.GetSessionData(c, "redirect_url")
 	return responses.Render(c, utils.SecuredLoginTemplate, fiber.Map{
 		"Username": username,
 		"UserInfo": userInfo,

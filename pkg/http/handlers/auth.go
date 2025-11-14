@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -109,6 +110,12 @@ func HealthCheck(c *fiber.Ctx) error {
 func LandingPage(c *fiber.Ctx) error {
 	return responses.Render(c, utils.LandingTemplate, fiber.Map{
 		"Title": "Welcome to the Auth Service",
+	})
+}
+
+func DemoPage(c *fiber.Ctx) error {
+	return responses.Render(c, "demo.html", fiber.Map{
+		"Title": "Secure WASM API Demo",
 	})
 }
 
@@ -241,7 +248,7 @@ func LoginPage(c *fiber.Ctx) error {
 	redirect := c.Query("redirect")
 	if redirect != "" && isValidRedirect(redirect) {
 		// Store redirect in session for use in subsequent requests
-		setSessionData(c, "redirect_url", redirect)
+		libs.SetSessionData(c, "redirect_url", redirect)
 	}
 	return responses.Render(c, utils.LoginTemplate, fiber.Map{
 		"Title": "Login",
@@ -252,7 +259,7 @@ func RegisterPage(c *fiber.Ctx) error {
 	redirect := c.Query("redirect")
 	if redirect != "" && isValidRedirect(redirect) {
 		// Store redirect in session for use in subsequent requests
-		setSessionData(c, "redirect_url", redirect)
+		libs.SetSessionData(c, "redirect_url", redirect)
 	}
 	return responses.Render(c, utils.RegisterTemplate, fiber.Map{
 		"Title": "Register",
@@ -341,14 +348,14 @@ func PostLogin(c *fiber.Ctx) error {
 		})
 	}
 	if userInfo.LoginType == "simple" {
-		redirect, _ := getSessionData(c, "redirect_url")
+		redirect, _ := libs.GetSessionData(c, "redirect_url")
 		return responses.Render(c, utils.SimpleLoginTemplate, fiber.Map{
 			"Username": userInfo.Username,
 			"UserInfo": userInfo,
 			"Redirect": redirect,
 		})
 	}
-	redirect, _ := getSessionData(c, "redirect_url")
+	redirect, _ := libs.GetSessionData(c, "redirect_url")
 	return responses.Render(c, utils.SecuredLoginTemplate, fiber.Map{
 		"Username": userInfo.Username,
 		"UserInfo": userInfo,
@@ -576,6 +583,32 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 			"There was an internal error during login. Please try again.",
 			fmt.Sprintf("PASETO token encryption failed: %v", err), utils.LoginURI)
 	}
+	// Defensive: ensure tokenStr is not empty. If it is, generate a secure random fallback
+	if tokenStr == "" {
+		buf := make([]byte, 32)
+		if _, rerr := rand.Read(buf); rerr != nil {
+			// If we can't generate randomness, treat as server error
+			return renderErrorPage(c, http.StatusInternalServerError, "Session Token Error",
+				"Failed to generate session token.",
+				"There was an internal error during login. Please try again.",
+				fmt.Sprintf("random token generation failed: %v", rerr), utils.LoginURI)
+		}
+		tokenStr = base64.StdEncoding.EncodeToString(buf)
+		log.Printf("warning: paseto returned empty token, using fallback token for user %s", userIDStr)
+	}
+	// Defensive: ensure tokenStr is not empty. If it is, generate a secure random fallback
+	if tokenStr == "" {
+		buf := make([]byte, 32)
+		if _, rerr := rand.Read(buf); rerr != nil {
+			// If we can't generate randomness, treat as server error
+			return renderErrorPage(c, http.StatusInternalServerError, "Session Token Error",
+				"Failed to generate session token.",
+				"There was an internal error during login. Please try again.",
+				fmt.Sprintf("random token generation failed: %v", rerr), utils.LoginURI)
+		}
+		tokenStr = base64.StdEncoding.EncodeToString(buf)
+		log.Printf("warning: paseto returned empty token, using fallback token for user %s", userIDStr)
+	}
 
 	// Clear logout status for this user after successful authentication
 	objects.Manager.LogoutTracker().ClearUserLogout(userInfo.UserID)
@@ -587,6 +620,28 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		sessionName = utils.DefaultSessionName
 	}
 	c.Cookie(utils.GetCookie(enableHTTPS, appEnv, sessionName, tokenStr, int(sessionTimeout.Seconds())))
+	// Generate session keys for encrypted API communication
+	sessionKey := make([]byte, 32)
+	hmacKey := make([]byte, 32)
+	if _, err := rand.Read(sessionKey); err != nil {
+		return renderErrorPage(c, http.StatusInternalServerError, "Session Key Generation Error",
+			"Failed to generate session keys.",
+			"There was an internal error during login. Please try again.",
+			fmt.Sprintf("Session key generation failed: %v", err), utils.LoginURI)
+	}
+	if _, err := rand.Read(hmacKey); err != nil {
+		return renderErrorPage(c, http.StatusInternalServerError, "Session Key Generation Error",
+			"Failed to generate session keys.",
+			"There was an internal error during login. Please try again.",
+			fmt.Sprintf("HMAC key generation failed: %v", err), utils.LoginURI)
+	}
+
+	// Set session keys in cookies
+	libs.SetSessionData(c, "session_key", base64.StdEncoding.EncodeToString(sessionKey))
+	libs.SetSessionData(c, "hmac_key", base64.StdEncoding.EncodeToString(hmacKey))
+	libs.SetSessionData(c, "user_id", userIDStr)
+	libs.SetSessionData(c, "session_created_at", time.Now().Format(time.RFC3339))
+
 	manager, ok := objects.Manager.(*libs.Manager)
 	uri := utils.AppURI
 	if ok && manager.LoginSuccessURL != "" {
@@ -598,7 +653,7 @@ func PostSimpleLogin(c *fiber.Ctx) error {
 		redirect = c.Query("redirect")
 	}
 	if redirect == "" {
-		redirect, _ = getSessionData(c, "redirect_url")
+		redirect, _ = libs.GetSessionData(c, "redirect_url")
 	}
 	if redirect != "" && isValidRedirect(redirect) {
 		redirectWithFields := appendSuccessFields(redirect, userIDStr, userInfo.Username, tokenStr)
@@ -821,6 +876,28 @@ func PostSecureLogin(c *fiber.Ctx) error {
 	// Clear logout status for this user after successful authentication
 	objects.Manager.LogoutTracker().ClearUserLogout(info.UserID)
 
+	// Generate session keys for encrypted API communication
+	sessionKey := make([]byte, 32)
+	hmacKey := make([]byte, 32)
+	if _, err := rand.Read(sessionKey); err != nil {
+		return renderErrorPage(c, http.StatusInternalServerError, "Session Key Generation Error",
+			"Failed to generate session keys.",
+			"There was an internal error during login. Please try again.",
+			fmt.Sprintf("Session key generation failed: %v", err), utils.LoginURI)
+	}
+	if _, err := rand.Read(hmacKey); err != nil {
+		return renderErrorPage(c, http.StatusInternalServerError, "Session Key Generation Error",
+			"Failed to generate session keys.",
+			"There was an internal error during login. Please try again.",
+			fmt.Sprintf("HMAC key generation failed: %v", err), utils.LoginURI)
+	}
+
+	// Set session keys in cookies
+	libs.SetSessionData(c, "session_key", base64.StdEncoding.EncodeToString(sessionKey))
+	libs.SetSessionData(c, "hmac_key", base64.StdEncoding.EncodeToString(hmacKey))
+	libs.SetSessionData(c, "user_id", userIDStr)
+	libs.SetSessionData(c, "session_created_at", time.Now().Format(time.RFC3339))
+
 	enableHTTPS := objects.Config.GetBool("app.https")
 	appEnv := objects.Config.GetString("app.env")
 	sessionName := objects.Config.GetString("auth.session_name")
@@ -839,7 +916,7 @@ func PostSecureLogin(c *fiber.Ctx) error {
 		redirect = c.Query("redirect")
 	}
 	if redirect == "" {
-		redirect, _ = getSessionData(c, "redirect_url")
+		redirect, _ = libs.GetSessionData(c, "redirect_url")
 	}
 	if redirect != "" && isValidRedirect(redirect) {
 		redirectWithFields := appendSuccessFields(redirect, userIDStr, info.Username, tokenStr)

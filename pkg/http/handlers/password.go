@@ -38,7 +38,7 @@ func ForgotPasswordPage(c *fiber.Ctx) error {
 	redirect := c.Query("redirect")
 	if redirect != "" && isValidRedirect(redirect) {
 		// Store redirect in session for use in subsequent requests
-		setSessionData(c, "redirect_url", redirect)
+		libs.SetSessionData(c, "redirect_url", redirect)
 	}
 	return responses.Render(c, utils.ForgotPasswordTemplate, fiber.Map{
 		"Title": "Forgot Password",
